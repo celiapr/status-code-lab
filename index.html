@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minimum Human Quota</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="pre">
+<div id="app">
+  <header>
+    <div id="brand"></div>
+    <div id="compliance"></div>
+    <div><span id="hdr"></span> <b id="hdr-time"></b> <button id="mute" class="mini"></button></div>
+  </header>
+  <div id="timer"><div></div></div>
+
+  <!-- left: the worker -->
+  <aside id="left">
+    <div id="avatar" class="avatar">
+      <p><b id="worker-title"></b></p>
+    </div>
+    <p class="label" id="lbl-chain"></p><p class="stat" id="chain-text"></p>
+    <div class="bar"><div id="chain-bar"></div></div>
+    <p class="label" id="lbl-resets"></p><p class="stat" id="resets"></p>
+  </aside>
+
+  <!-- centre: intro screens, then the work -->
+  <main id="main"></main>
+
+  <!-- right: messages -->
+  <aside id="right">
+    <div id="inbox" hidden></div>
+    <div class="tabs"><button id="tab-channel" class="tab active"></button><button id="tab-break" class="tab" hidden></button></div>
+    <form id="chat" autocomplete="off"><input id="chat-input" type="text"></form>
+    <div id="feed-channel" class="feed"></div>
+    <div id="feed-break" class="feed" hidden></div>
+  </aside>
+</div>
+
+<!-- the screen fades as the worker disappears -->
+<div id="veil"></div>
+
+<!-- direct messages from other workers -->
+<div id="modal" hidden>
+  <div class="dialog">
+    <p class="label"><span class="dm-tag"></span></p>
+    <p class="dm-who muted"></p>
+    <p class="dm-text big"></p>
+    <div class="dm-extra"></div>
+    <div class="dm-hints"></div>
+    <form class="dm-form" autocomplete="off">
+      <input id="dm-input" type="text">
+      <div class="dm-buttons"></div>
+    </form>
+    <p class="dm-note muted"></p>
+    <p class="dm-interpret muted"></p>
+    <button type="button" class="dm-system link"></button>
+  </div>
+</div>
+
+<!-- full-screen moments: reset, game over, endings -->
+<div id="overlay" hidden></div>
+
+<script src="content.js"></script>
+<script src="sound.js"></script>
+<script src="tasks.js"></script>
+<script src="story.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
