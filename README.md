@@ -7,7 +7,9 @@ Developed within the Medialab Matadero residency "LAB 5 La mecánica de la verda
 **Screen flow:** a map of every screen, with screenshots, is at https://claude.ai/artifact/1PhHE5PMkwVCSdB5Kwz8Ff (only people it has been shared with can open it).
 
 ## Run it
-Double-click `index.html`. It opens in the browser; no installation or internet needed.
+Online: **https://celiapr.github.io/status-code-lab/** (published with GitHub Pages from the repository `celiapr/status-code-lab`; every change pushed to `main` goes live in a minute or two).
+
+On a computer: double-click `index.html`. It opens in the browser; no installation or internet needed.
 
 Testing (add to the end of the address):
 - `?seconds=10` gives 10 seconds per task instead of 60.
