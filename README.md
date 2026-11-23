@@ -66,3 +66,6 @@ Everything is in `content.js`, with comments:
 ## Limits
 - Typed answers are understood by keyword lists (in English, plus a few Spanish words), not by real language understanding.
 - It's single-player: the other workers are written characters, and their chat replies are prewritten.
+
+## Future additions
+- Use the Gen Z slang dataset (https://huggingface.co/datasets/MLBtrio/genz-slang-dataset) to generate the coworkers' texts.
