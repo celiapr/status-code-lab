@@ -283,6 +283,24 @@ const DEMO_TEXT = {
   marked: "{n} / {total} marked"
 };
 
+// the Software Engineer's binary blocks (text, as in the PDF)
+const BITS = String.raw`
+1 0 1 0 1 0 1 0 1
+1 0 1 0 1 0 1 0 1
+1 0 1 0 1 0 1 0 1
+1 0 1 0 1 0 1 0 1
+1 0 1 0 1 0 1 0 1
+1 0 1 0 1 0 1 0 1
+1 0 1 0 1 0 1 0 1`;
+const BITS_ODD = String.raw`
+1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1
+1 1 1 1 0 1 1 1 1
+1 1 1 1 1 1 1 1 1
+1 1 1 1 1 1 1 1 1
+0 1 1 1 1 1 1 1 0`;
+
 const DEMO = {
   actor: [
     { type:"odd", items:[
@@ -299,16 +317,17 @@ const DEMO = {
     { type:"differences", count:7, items:[ { src:"img/worker1_task4_1.jpg" }, { src:"img/worker1_task4_2.jpg" } ] }
   ],
 
-  // the Software Engineer's images are made from text (numbers, drawings, code, formulas): img/game/engineer_…
+  // the Software Engineer. As in the PDF: the different element and the differences are text;
+  // the match uses the team's photos (img/engineer/); the memory grid (not in the PDF) uses images of code for now
   engineer: [
-    { type:"odd", items:[ { src:"img/game/engineer_task1_1.jpg" }, { src:"img/game/engineer_task1_2.jpg" }, { src:"img/game/engineer_task1_3.jpg" }, { src:"img/game/engineer_task1_4.jpg" } ] },
+    { type:"odd", items:[ { text:BITS }, { text:BITS }, { text:BITS_ODD }, { text:BITS } ] },
     { type:"match", rows:[
-      { src:"img/game/engineer_task2_1.jpg", options:["CREPE", "CHIP", "HARD DRIVE"] },
-      { src:"img/game/engineer_task2_2.jpg", options:["COMPUTER", "BOOK", "TECHNO FEST"] },
-      { src:"img/game/engineer_task2_3.jpg", options:["MOUSE", "ELEPHANT", "EMPANADILLAS"] },
-      { src:"img/game/engineer_task2_4.jpg", options:["IPHONE", "BATHTUB", "HEADPHONES"] } ] },
+      { src:"img/engineer/worker3_task3_1.jpg", options:["CREPE", "CHIP", "HARD DRIVE"] },
+      { src:"img/engineer/worker3_task3_2.jpg", options:["COMPUTER", "BOOK", "TECHNO FEST"] },
+      { src:"img/engineer/worker3_task3_4.jpg", options:["MOUSE", "ELEPHANT", "EMPANADILLAS"] },
+      { src:"img/engineer/worker3_task3_3.jpg", options:["IPHONE", "BATHTUB", "HEADPHONES"] } ] },
     { type:"memory", items:[ { src:"img/game/engineer_task3_1.jpg" }, { src:"img/game/engineer_task3_2.jpg" }, { src:"img/game/engineer_task3_3.jpg" }, { src:"img/game/engineer_task3_4.jpg" } ] },
-    { type:"differences", count:7, values:true, items:[ { src:"img/game/engineer_task4_1.jpg" }, { src:"img/game/engineer_task4_2.jpg" } ] }   // values: "Compare the submitted values."
+    { type:"differences", count:7, items:[ { text:"∑(2x² + 3y) - 7 = 14" }, { text:"∫(2x² + 3y) - 7 = 14" } ] }
   ],
 
   cook: [
