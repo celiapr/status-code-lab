@@ -118,10 +118,12 @@ const Dialog = (() => {
 })();
 
 /* =====================================================================
-   STORY: what happens after tasks and during rest periods
+   STORY: the messages that appear after tasks, and the road to the union
    ===================================================================== */
 const Story = (() => {
-  const S = { saidNo:false, asks:0, step:0, cold:false, nextStepAt:0, offered:[], strikeReady:false,
+  // saidNo: the coworkers' messages are on (from the start now that there is no survey)
+  // joined: the worker has accepted a coworker's message at least once (the skip arrow works from then on)
+  const S = { saidNo:true, joined:false, asks:0, step:0, cold:false, nextStepAt:0, offered:[], strikeReady:false,
               breakroomOpen:false, breakroomIdx:0, channelIdx:0, ghostIdx:0, pastPosted:false, chatReplyIdx:0,
               pending:false };          // pending: a union message waiting to be read
   const level = () => Math.min(G.resets, 3);
@@ -145,14 +147,12 @@ const Story = (() => {
     await unionStep();
   }
 
-  /* messages that appear on their own after each task (hints only from the first survey on) */
+  /* messages that appear on their own after each task */
   function afterTask(){
-    if(!S.asks && !S.saidNo){
-      // before the first survey: nothing yet
-    } else if(chance(CONFIG.GHOST_MESSAGE_CHANCE[level()])){
+    if(chance(CONFIG.GHOST_MESSAGE_CHANCE[level()])){
       const l = STORY.ghosts[level()];
       say("channel", l[S.ghostIdx++ % l.length]);
-    } else if(!S.saidNo && S.channelIdx < STORY.channel.length && chance(0.35)){
+    } else if(S.channelIdx < STORY.channel.length && chance(0.35)){
       say("channel", STORY.channel[S.channelIdx++]);
     }
     if(S.breakroomOpen && chance(0.5)) chatter();
@@ -216,6 +216,7 @@ const Story = (() => {
       options:[st.accept, st.decline], fallback:null, systemChoice:1, freeText:!!st.freeText
     });
     if(res.choice === 0){
+      S.joined = true; S.cold = false;
       await doAction(st.action, res.text);
       if(st.reply) say(where(), [st.from, st.reply]);
       S.step++;
@@ -224,9 +225,10 @@ const Story = (() => {
     } else {
       S.offered[S.step] = true;
       say(where(), [st.from, st.declineReply]);
-      // turning them down: they stop writing (only a new NO in the survey brings them back),
-      // the break room goes quiet and nobody covers for the worker any more
-      S.saidNo = false; S.cold = true;
+      // turning them down: the break room goes quiet and nobody covers for the worker any more,
+      // until they accept again. The message comes back a couple of tasks later.
+      S.cold = true;
+      S.nextStepAt = G.tasksDone + CONFIG.UNION_REOFFER_AFTER;
     }
   }
 
@@ -237,9 +239,10 @@ const Story = (() => {
       chatter();
     }
     if(action === "share"){
-      const sh = STORY.share, mine = v => G.history.filter(h => h.action === v);
-      const cell = v => mine(v).length ? fmt(sh.format, { pct:Math.round(100 * mine(v).filter(h => h.negative).length / mine(v).length) }) : sh.none;
-      const rows = [...sh.rows, [sh.you, cell("validated"), cell("corrected")]];
+      const sh = STORY.share;
+      const all = G.history;
+      const cell = all.length ? fmt(sh.format, { pct:Math.round(100 * all.filter(h => h.negative).length / all.length) }) : sh.none;
+      const rows = [...sh.rows, [sh.you, cell]];
       await Dialog.show({ from:"kwame", text:sh.title,
         html:`<table class="share"><tr class="muted">${sh.header.map(h => `<td>${esc(h)}</td>`).join("")}</tr>${rows.map((r, i) => `<tr class="${i === rows.length - 1 ? "you" : ""}">${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table>
               <p><b>${esc(sh.conclusion)}</b></p>` });
@@ -269,7 +272,7 @@ const Story = (() => {
   }
 
   return { start, afterTask, afterReset, chatter, onBreak, survey, postponeStrike, playerWrote, refreshInbox,
-           strikeReady: () => S.strikeReady, progress: () => S.cold ? 0 : S.step };
+           strikeReady: () => S.strikeReady, progress: () => S.cold ? 0 : S.step, joined: () => S.joined };
 })();
 
 /* ---------------- players who disappeared before, on this computer ---------------- */

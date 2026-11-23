@@ -1,8 +1,8 @@
 /* =====================================================================
    GAME
-   Screens, the rounds of tasks, rest periods and surveys, the (rigged)
-   review at the end of each round, resets, disappearing, the strike and the endings.
-   Texts and settings: content.js · Tasks: tasks.js · Messages: story.js
+   Screens, the rounds of tasks (one round per profile), the (rigged) review
+   at the end of each round, resets, disappearing, the strike and the endings.
+   Texts, settings and the demo tasks: content.js · Tasks: tasks.js · Messages: story.js
    ===================================================================== */
 
 const qs = new URLSearchParams(location.search);
@@ -13,16 +13,17 @@ const $ = s => document.querySelector(s);
 const fmt = (s, v={}) => String(s).replace(/\{(\w+)\}/g, (_, k) => v[k] ?? "");
 const clock = s => { const c = Math.max(0, Math.ceil(s)); return `${Math.floor(c / 60)}:${String(c % 60).padStart(2, "0")}`; };
 
-const G = { worker:null, name:"", id:"", resets:0, pos:0, round:[], roundNo:1,
-            task:null, timer:null, tasksDone:0, history:[], busy:false, ended:false,
-            bag:[], timeoutsInRow:0, onBreak:false };
+const G = { worker:null, used:[], name:"", id:"", resets:0, pos:0, round:[], roundNo:1,
+            task:null, timer:null, cleanup:null, tasksDone:0, history:[], busy:false, ended:false,
+            timeoutsInRow:0, onBreak:false };
 
 const presence = () => CONFIG.PRESENCE[Math.min(G.resets, CONFIG.PRESENCE.length - 1)];
-const resetsLeft = () => CONFIG.PRESENCE.length - 1 - G.resets;
+const resetsLeft = () => Math.max(0, CONFIG.PRESENCE.length - 1 - G.resets);
 const pct = p => Math.round(p * 100);
 const visible = p => 1 - (1 - p) * CONFIG.SCREEN_FADE;   // how visible the screen is at a given presence
-// the fading: how light the background gets (0 = black, 1 = white, where the white text disappears)
-const setFade = amount => document.documentElement.style.setProperty("--lift", Math.round(255 * amount));
+// the fading: a black layer over the whole screen (0 = none, 1 = everything black)
+const setFade = amount => document.documentElement.style.setProperty("--veil", amount.toFixed(2));
+// previous fading (towards white): const setFade = amount => document.documentElement.style.setProperty("--lift", Math.round(255 * amount));
 const roundLength = () => CONFIG.ROUND.length;
 
 /* ---------------- header + side panel ---------------- */
@@ -31,15 +32,15 @@ function setTime(text, fraction){
   $("#timer > div").style.width = (Math.max(0, fraction) * 100) + "%";
 }
 function updatePanels(){
-  const p = presence();
-  // one fade for everything: the whole screen (name included) fades at the same pace
-  setFade(1 - visible(p));
-  // previous fading: document.documentElement.style.setProperty("--veil", (1 - visible(p)).toFixed(2));
+  // one fade for everything: the whole screen fades towards black at the same pace
+  setFade(1 - visible(presence()));
+  if(!G.worker) return;
   const taskOf = fmt(TEXT.panels.chainOf, { n:Math.min(G.pos + 1, roundLength()), total:roundLength() });
+  $("#worker-title").textContent = `Worker ${G.worker.number} · ${G.worker.title}`;
   $("#lbl-chain").textContent = fmt(TEXT.panels.chain, { n:G.roundNo });
   $("#chain-text").textContent = taskOf;
   $("#chain-bar").style.width = (G.pos / roundLength() * 100) + "%";
-  $("#resets").textContent = Array.from({ length:CONFIG.PRESENCE.length - 1 }, (_, i) => i < resetsLeft() ? "(*)" : "( )").join(" ");
+  $("#resets").textContent = Array.from({ length:resetsLeft() }, () => "(*)").join(" ");
   $("#hdr").textContent = `${G.id} · ${taskOf}`;
 }
 
@@ -69,144 +70,142 @@ function setChat(){
    SCREENS BEFORE WORK
    ===================================================================== */
 
-/* 2. the login page: the law is only in the small print */
-function showLogin(){
-  const t = TEXT.login;
-  $("#main").innerHTML = `<section class="screen">
-    <p class="label">${t.welcome}</p>
-    <h1 class="logo-title">${t.title}</h1>
-    <p class="logo-sub">${t.subtitle}</p>
-    <form id="login" autocomplete="off">
-      <p class="label">${t.name}</p>
-      <input id="name" type="text" placeholder="${esc(t.placeholder)}" maxlength="40">
-      <button>${t.button}</button>
-    </form>
-    <div class="footnote">${t.footnote.map(p => `<p>${p}</p>`).join("")}</div></section>`;
-  $("#name").focus();
-  $("#login").onsubmit = e => {
-    e.preventDefault();
-    const n = $("#name").value.trim();
-    if(!n){ $("#name").focus(); return; }
-    G.name = n; showProfiles();
-  };
-}
-
-/* 1. the first screen: human verification */
+/* 1. human verification: "Select those who cannot dream." */
 function showVerification(){
   const s = TEXT.select;
   $("#main").innerHTML = `<section class="screen">
     <p class="big">${s.human}</p>
     <div class="captcha">
-      <div class="captcha-head"><div class="prompt">${esc(s.captcha.prompt)}</div></div>
-      <div class="tiles cols-3" id="tired"></div>
+      <div class="captcha-head"><div class="prompt">${esc(VERIFY.prompt)}</div></div>
+      <div class="photos" id="dream">${VERIFY.images.map((im, i) =>
+        `<button type="button" class="photo" data-i="${i}"><img src="${esc(im.src)}" alt="" draggable="false"></button>`).join("")}</div>
       <p><button id="verify">${esc(s.captcha.verify)}</button> <span class="muted" id="retry"></span></p>
-    </div>
-    <p><button id="mortal" class="check">[ ] ${esc(s.captcha.statement)}</button></p>
-    <p id="verified">&nbsp;</p>
-    <button id="continue" hidden>${esc(s.captcha.continue)}</button></section>`;
-  // 1. select everything that gets tired
-  const items = shuffle(padAll(HUMAN_CHECK.map(i => ({ ...i, art:lines(i.art) }))));
+    </div></section>`;
   const chosen = new Set();
-  let tiredOk = false, mortal = false;
-  $("#tired").innerHTML = items.map((it, i) => `<button type="button" class="tile" data-i="${i}">${artHTML(it.art)}</button>`).join("");
-  document.querySelectorAll("#tired .tile").forEach(b => b.onclick = () => {
-    if(tiredOk) return;
+  document.querySelectorAll("#dream .photo").forEach(b => b.onclick = () => {
     const i = +b.dataset.i; chosen.has(i) ? chosen.delete(i) : chosen.add(i);
-    b.classList.toggle("picked", chosen.has(i)); $("#retry").textContent = ""; Sound.play("click");
+    b.classList.toggle("chosen", chosen.has(i)); $("#retry").textContent = ""; Sound.play("click");
   });
   $("#verify").onclick = () => {
-    tiredOk = items.every((it, i) => !!it.tired === chosen.has(i));
-    if(!tiredOk){ $("#retry").textContent = s.captcha.retry; Sound.play("negative"); return; }
-    $("#verify").disabled = true; Sound.play("positive"); check();
+    // right: every thing that cannot dream is selected, nobody who dreams is; the open ones count either way
+    const ok = VERIFY.images.every((im, i) => im.cannot === null || im.cannot === chosen.has(i));
+    if(!ok){ $("#retry").textContent = s.captcha.retry; Sound.play("negative"); return; }
+    Sound.play("positive"); showChecklist();
   };
-  // 2. I will die.
-  $("#mortal").onclick = () => {
-    mortal = !mortal;
-    $("#mortal").textContent = `[${mortal ? "x" : " "}] ${s.captcha.statement}`; Sound.play("click"); check();
-  };
-  // both done: verified
-  async function check(){
-    if(!tiredOk || !mortal) return;
-    $("#mortal").disabled = true;
-    await wait(600);
-    $("#verified").textContent = s.captcha.done;
-    await wait(600);
-    $("#continue").hidden = false;
-  }
-  $("#continue").onclick = showLogin;
 }
 
-/* 3. choosing a profile */
-function showProfiles(){
-  const s = TEXT.select;
+/* 2. human verification: tick all that apply to you as a person */
+function showChecklist(){
+  const c = TEXT.select.checklist;
   $("#main").innerHTML = `<section class="screen">
-    <p class="label">${s.label}</p>
-    <p class="big">${s.pick}</p>
+    <p class="big">${TEXT.select.human}</p>
+    <div class="captcha checklist">
+      <p class="check-title">${esc(c.title)}</p>
+      ${c.items.map((it, i) => `<button type="button" class="check" data-i="${i}">( ) ${esc(it)}</button>`).join("")}
+      <p><button id="verify">${esc(c.verify)}</button> <span class="muted" id="retry"></span></p>
+    </div></section>`;
+  const ticked = new Set();
+  document.querySelectorAll(".checklist .check").forEach(b => b.onclick = () => {
+    const i = +b.dataset.i; ticked.has(i) ? ticked.delete(i) : ticked.add(i);
+    b.textContent = `(${ticked.has(i) ? "x" : " "}) ${c.items[i]}`; $("#retry").textContent = ""; Sound.play("click");
+  });
+  $("#verify").onclick = () => {
+    if(ticked.size < c.items.length){ $("#retry").textContent = c.retry; Sound.play("negative"); return; }
+    Sound.play("positive"); showApproved();
+  };
+}
+
+/* 3. approved as a human (the old login page, without the login) */
+function showApproved(){
+  const t = TEXT.login;
+  $("#main").innerHTML = `<section class="screen">
+    <p class="label">${t.welcome}</p>
+    <h1 class="logo-title">${t.title}</h1>
+    <p class="logo-sub">${t.subtitle}</p>
+    ${t.approved.map(l => `<p class="statement">${l}</p>`).join("")}
+    <p><button id="next">${t.button}</button></p></section>`;
+  $("#next").onclick = showTerms;
+}
+
+/* 4. the platform's terms */
+function showTerms(){
+  const t = TEXT.login, m = TEXT.terms;
+  $("#main").innerHTML = `<section class="screen">
+    <p class="label">${t.welcome}</p>
+    <h1 class="logo-title">${t.title}</h1>
+    <p class="logo-sub">${t.subtitle}</p>
+    ${m.sections.map(x => `<div class="terms"><p class="terms-title">${esc(x.title)}</p><p>${esc(x.text)}</p></div>`).join("")}
+    <p><button id="next">${m.button}</button></p></section>`;
+  $("#next").onclick = () => showProfiles(false);
+}
+
+/* 5. choosing a profile. After a failed review: the next one (profiles already used are greyed out) */
+function showProfiles(next){
+  const s = TEXT.select;
+  document.body.classList.add("pre");
+  setTime("", 0); $("#hdr").textContent = "";
+  const usable = w => !G.used.includes(w.id) || G.used.length >= WORKERS.length;   // all used up: any again
+  $("#main").innerHTML = `<section class="screen">
+    ${next ? "" : `<p class="label">${s.label}</p>`}
+    <p class="big">${next ? s.next : s.pick}</p>
     <div class="cards">${WORKERS.map(w => `
-      <div class="card" data-id="${w.id}">
+      <div class="card ${usable(w) ? "" : "used"}" data-id="${w.id}">
         <b>Worker ${w.number} · ${w.title}</b>
         <p class="quote">“${esc(w.quote)}”</p>
         <p class="label">${s.assigned}</p>${esc(w.specialty)}
       </div>`).join("")}</div></section>`;
   document.querySelectorAll(".card").forEach(c => c.onclick = () => {
-    G.worker = WORKERS.find(w => w.id === c.dataset.id); showOnboarding();
+    const w = WORKERS.find(x => x.id === c.dataset.id);
+    if(!usable(w)) return;
+    G.worker = w; if(!G.used.includes(w.id)) G.used.push(w.id);
+    Sound.play("click");
+    next ? startRound() : showOnboarding();
   });
 }
 
+/* 6. before the first task */
 function showOnboarding(){
-  const o = TEXT.onboarding, w = G.worker;
-  $("#main").innerHTML = `<section class="screen">
-    <p class="label">${o.label}</p>
-    <p><b>Worker ${w.number} · ${w.title}</b><br><span class="muted">${esc(w.specialty)}</span></p>
-    ${o.rules.map(r => `<p>— ${fmt(r, { seconds:CONFIG.TASK_SECONDS, tasks:roundLength() })}</p>`).join("")}
-    <button id="start">${o.button}</button></section>`;
+  const o = TEXT.onboarding;
+  $("#main").innerHTML = `<section class="screen briefing">
+    ${o.lines.map(l => `<p>${l}</p>`).join("")}
+    <button id="start" class="start">${o.button}</button></section>`;
   $("#start").onclick = startWork;
 }
 
 function startWork(){
   G.id = "worker_" + randInt(1000, 9999);
+  if(CONFIG.CHATS) Story.start();
+  startRound();
+}
+function startRound(){
   document.body.classList.remove("pre");
-  $("#worker-title").textContent = `Worker ${G.worker.number} · ${G.worker.title}`;
+  G.pos = 0; G.round = [];
   updatePanels();
-  Story.start();
   nextTask();
 }
 
 /* =====================================================================
-   THE ROUND: task, rest, task, survey, task, rest, task, survey → review
+   THE ROUND: the profile's 4 tasks → review
    ===================================================================== */
 function nextTask(){
   if(G.ended) return;
   if(Story.strikeReady()) return showStrike();
   G.busy = false;
-  const own = !chance(CONFIG.OTHER_SPECIALTY_CHANCE);
-  const from = own ? G.worker : pick(WORKERS.filter(w => w.id !== G.worker.id));
-  if(!G.bag.length) G.bag = shuffle(Object.keys(TASKS));
-  const kind = G.bag.pop();
-  const t = TASKS[kind].make(WORK[from.id]);
-  t.kind = kind; G.task = t;
+  const spec = DEMO[G.worker.id][G.pos % DEMO[G.worker.id].length];
+  const t = { ...spec, kind:spec.type };
+  G.task = t;
   updatePanels();
-
+  const d = DEMO_TEXT[t.kind];
+  const instruction = t.kind === "differences" && (t.values || !t.items[0].src) ? DEMO_TEXT.differencesText : d.instruction;
   $("#main").innerHTML = `<section class="task">
-    <p class="label">${fmt(TEXT.task.of, { n:G.pos + 1, total:roundLength() })} · ${TASK_TEXT[kind].title}</p>
-    ${own ? "" : `<p class="note">${TEXT.task.reassigned} ${esc(from.specialty)}</p>`}
-    <p>${TASK_TEXT[kind].instruction}</p>
-    <p class="muted legend"><span class="sw model">x</span> ${TEXT.task.legendModel} &nbsp; <span class="sw picked">x</span> ${TEXT.task.legendYou}</p>
+    <p class="label">${fmt(TEXT.task.of, { n:G.pos + 1, total:roundLength() })} · ${d.title}</p>
+    <div class="instruction">${fmt(instruction, { n:t.count })}</div>
     <div id="task-body"></div>
-    <p><button id="submit"></button> <button id="undo" class="link">${TEXT.task.undo}</button></p>
+    <button id="skip" class="skip" title="${esc(TEXT.task.skip)}" aria-label="${esc(TEXT.task.skip)}">→</button>
   </section>`;
-
-  const changed = () => {
-    const agree = same(t.answer, t.model);
-    $("#submit").textContent = agree ? TEXT.task.validate : TEXT.task.correct;
-    $("#submit").classList.toggle("inverse", !agree);
-    $("#undo").style.visibility = agree ? "hidden" : "visible";
-    Sound.play("click");
-  };
-  TASKS[kind].render(t, $("#task-body"), changed);
-  changed();
-  $("#undo").onclick = () => { t.answer = copy(t.model); TASKS[kind].render(t, $("#task-body"), changed); changed(); };
-  $("#submit").onclick = () => submitTask(false);
+  G.cleanup = DEMO_TYPES[t.kind].render(t, $("#task-body"), () => setTimeout(() => submitTask("done"), CONFIG.SUBMIT_PAUSE)) || null;
+  // the arrow: skipping a task, like a strike of one. It only works once the worker has joined the others.
+  $("#skip").onclick = () => { if(Story.joined()) submitTask("skipped"); };
   startTimer();
 }
 
@@ -216,48 +215,37 @@ function startTimer(){
   const tick = () => {
     const left = (deadline - performance.now()) / 1000;
     setTime(clock(left), left / CONFIG.TASK_SECONDS);
-    if(left <= 0){ clearInterval(G.timer); submitTask(true); }
+    const s = $("#skip"); if(s) s.disabled = !Story.joined() || G.busy;
+    if(left <= 0){ clearInterval(G.timer); submitTask("timeout"); }
   };
   tick(); G.timer = setInterval(tick, 200);
 }
 
-/* ---------------- submitting a task ----------------
-   Each task is evaluated now (rigged on purpose: validating the Model and
-   correcting it can both be punished), but the worker only sees the results
-   in the review at the end of the round. */
-async function submitTask(timeout){
+/* ---------------- a task ends: done, out of time, or skipped ----------------
+   It is evaluated now (rigged on purpose), but nothing is shown until the review. */
+async function submitTask(action){
   if(G.busy || G.ended) return;
   G.busy = true; clearInterval(G.timer); setTime("", 0);
-  const t = G.task, N = CONFIG.NEGATIVE;
-  const agree = same(t.answer, t.model), correct = same(t.answer, t.truth), modelRight = same(t.model, t.truth);
-  const action = timeout ? "timeout" : agree ? "validated" : "corrected";
-  const key = timeout ? "timeout" : agree ? (modelRight ? "validatedRight" : "validatedWrong") : (correct ? "correctedRight" : "correctedWrong");
-  const p = timeout ? N.timeout : Math.min(N.max, Math.max(0.05,
-    N[key] + N.risePerTask * G.pos + N.risePerReset * G.resets - N.unionRelief * Story.progress()));
-  const negative = chance(p);
-
-  G.history.push({ action, negative, correct });
-  G.round.push({ kind:t.kind, action, negative, reason:pick(REASONS[negative ? key : "positive"]) });
+  if(G.cleanup){ G.cleanup(); G.cleanup = null; }
+  const negative = chance(CONFIG.NEGATIVE[action] ?? 1);
+  G.history.push({ action, negative });
+  G.round.push({ kind:G.task.kind, action, negative });
   G.pos++; G.tasksDone++;
-  G.timeoutsInRow = timeout ? G.timeoutsInRow + 1 : 0;
-
-  document.querySelectorAll("#task-body button, #submit, #undo").forEach(b => b.disabled = true);
-  $("#submit").textContent = TEXT.task.submitted;
-  Sound.play("click");
+  G.timeoutsInRow = action === "timeout" ? G.timeoutsInRow + 1 : 0;
+  document.querySelectorAll("#task-body button, #skip").forEach(b => b.disabled = true);
   updatePanels();
 
-  await wait(CONFIG.SUBMIT_PAUSE);
-  Story.afterTask();
+  await wait(300);
+  if(CONFIG.CHATS) Story.afterTask();
   const next = CONFIG.ROUND[G.pos - 1];
   if(next === "rest") await takeBreak();
   if(next === "survey") await takeSurvey();
   if(G.ended) return;
-  if(G.pos >= roundLength()){ await review(); if(G.ended) return; }
+  if(G.pos >= roundLength()){ await review(); if(G.ended) return; return; }
   nextTask();
 }
 
-/* ---------------- the mandatory rest period ----------------
-   No work. Messages and chat are always there; now there is time for them. */
+/* ---------------- the mandatory rest period (only if "rest" is in CONFIG.ROUND) ---------------- */
 async function takeBreak(){
   if(G.ended) return;
   G.onBreak = true; Sound.play("rest");
@@ -280,15 +268,14 @@ async function takeBreak(){
   Story.onBreak();
   await countdown;
   clearInterval(chatter);
-  G.onBreak = false; setTime("", 0);                 // work resumes, even if a message is still open
+  G.onBreak = false; setTime("", 0);
   if(!$("#modal").hidden){ const b = document.querySelector(".dm-system"); b.textContent = TEXT.dialog.restOver; b.classList.add("urgent"); }
 }
 
-/* ---------------- the wellbeing survey ----------------
-   No clock: work resumes when the survey has been answered. */
+/* ---------------- the wellbeing survey (only if "survey" is in CONFIG.ROUND) ---------------- */
 async function takeSurvey(){
   if(G.ended) return;
-  while(Dialog.isOpen()) await wait(300);            // a message the worker opened is still on screen
+  while(Dialog.isOpen()) await wait(300);
   G.onBreak = true;
   const r = TEXT.surveyBreak;
   $("#main").innerHTML = `<section class="rest">
@@ -301,39 +288,32 @@ async function takeSurvey(){
 }
 
 /* ---------------- the review at the end of a round ----------------
-   The only evaluation the worker sees. A failed review resets the round
-   and the screen fades; organised workers cover for each other. */
+   It always fails (CONFIG.REVIEW_FAIL). A failed review costs a reset and the screen
+   gets darker; the next round is played with another profile. Organised workers
+   cover for each other. With no resets left, the worker disappears. */
 function review(){
   const e = TEXT.evaluation, r = TEXT.reset;
   const failed = G.round.filter(x => x.negative).length >= CONFIG.REVIEW_FAIL;
   const covered = failed && Story.progress() >= 1;
-  const from = presence();
   if(failed && !covered) G.resets++;
   const gone = G.resets >= CONFIG.PRESENCE.length;
-  const to = presence();
   Sound.play(failed ? "reset" : "positive");
-  const rows = G.round.map((x, i) => `<tr class="${x.negative ? "neg" : "pos"}">
-      <td>${i + 1}</td><td>${TASK_TEXT[x.kind].title}</td><td class="muted">${e.actions[x.action]}</td>
-      <td><span class="verdict">${x.negative ? e.negative : e.positive}</span></td><td>${esc(x.reason)}</td></tr>`).join("");
-  const o = overlay("reset", `<div class="box">
-    <p class="label">${fmt(e.label, { n:G.roundNo })}</p>
-    <div class="review-wrap"><table class="review">${rows}</table></div>
-    <p class="muted">${e.footer}</p>
+  const o = overlay("review", `<div class="box">
     <p class="big">${failed ? e.failed : e.passed}</p>
-    ${gone ? "" : `<p>${failed ? e.failedBody : e.passedBody}</p>`}
-    ${failed && !gone ? `<p class="avatar" style="opacity:${visible(from)}"><b>Worker ${G.worker.number} · ${G.worker.title}</b></p>
+    ${gone ? "" : `<p class="statement">${failed ? e.failedBody : e.passedBody}</p>
       ${covered
-        ? `<p class="framed-note"><span class="muted">${esc(personLabel(r.coveredBy))}</span><br>${fmt(r.covered, { p:pct(to) })}</p>`
-        : `<p>${fmt(r.remaining, { n:resetsLeft() })}</p>`}` : ""}
-    <button>${r.button}</button></div>`);
-  setTimeout(() => { const a = o.querySelector(".avatar"); if(a) a.style.opacity = visible(to); }, 400);
+        ? `<p class="framed-note"><span class="muted">${esc(personLabel(r.coveredBy))}</span><br>${esc(r.covered)}</p>`
+        : `<p>${fmt(r.remaining, { n:resetsLeft() })}</p>`}
+      <button>${r.button}</button>`}
+    </div>`);
   return new Promise(res => {
-    o.querySelector("button").onclick = async () => {
+    if(gone){ setTimeout(async () => { closeOverlay(); await disappear(); res(); }, FAST ? 200 : 3000); return; }
+    o.querySelector("button").onclick = () => {
       closeOverlay();
-      if(gone){ await disappear(); return res(); }
-      G.pos = 0; G.round = []; G.roundNo++;
+      G.roundNo++;
+      if(failed && CONFIG.CHATS) Story.afterReset();
       updatePanels();
-      if(failed) Story.afterReset();
+      showProfiles(true);
       res();
     };
   });
@@ -343,8 +323,7 @@ function review(){
 async function disappear(){
   G.ended = true; $("#modal").hidden = true; Story.refreshInbox();
   rememberDisappeared(G.id);
-  setFade(1);                                        // the background turns white: the worker is gone
-  // previous fading: document.documentElement.style.setProperty("--veil", "0.9");
+  setFade(1);                                        // everything goes black: the worker is gone
   Sound.play("vanish");
   await wait(2200);
   const g = TEXT.gameOver;
@@ -354,6 +333,7 @@ async function disappear(){
     ${g.lines.map(l => `<p>${l}</p>`).join("")}
     <p class="muted" id="ghost-count"></p>
     <button>${g.button}</button></div>`);
+  setFade(0);                                        // WORKER NOT FOUND comes out of the black
   let n = 0;
   const count = setInterval(() => { n += randInt(1, 3); const c = $("#ghost-count"); if(c) c.textContent = fmt(g.counter, { n }); else clearInterval(count); }, 450);
   o.querySelector("button").onclick = () => location.reload();
@@ -366,7 +346,6 @@ function showStrike(){
   // organising together gives the worker their presence back
   updatePanels();                                    // the side panel shows the same task number as the strike screen
   setFade(0);
-  // previous fading: document.documentElement.style.setProperty("--veil", "0");
   $("#main").innerHTML = `<section class="task strike">
     <p class="label">${fmt(TEXT.task.of, { n:G.pos + 1, total:roundLength() })}</p>
     <div class="framed-note"><span class="muted">${esc(personLabel(s.from))}</span><br><span class="big">${esc(s.now)}</span></div>
@@ -452,6 +431,7 @@ $("#chat").onsubmit = e => {
   if(!text) return;
   Story.playerWrote(activeTab, text); i.value = "";
 };
+if(!CONFIG.CHATS) document.body.classList.add("nochat");   // no chats: no right column
 $("#dm-input").placeholder = TEXT.dialog.placeholder;
 document.querySelector(".dm-tag").textContent = TEXT.dialog.direct;
 document.querySelector(".dm-system").textContent = TEXT.dialog.backToWork;

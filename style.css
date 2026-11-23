@@ -36,6 +36,11 @@
   button.link:hover { background:none; color:var(--fg); }
   button.inverse { background:var(--fg); color:var(--bg); }
 
+  /* no chats (CONFIG.CHATS = false): no right column */
+  body.nochat #app { grid-template-columns:240px 1fr; }
+  body.nochat header, body.nochat #timer { grid-column:1 / 3; }
+  body.nochat #right { display:none; }
+
   /* before work: only the centre */
   body.pre #app { grid-template-columns:1fr; }
   body.pre #left, body.pre #right, body.pre #compliance { display:none; }
@@ -82,6 +87,57 @@
   .card { border:1px solid var(--fg); padding:12px; width:250px; cursor:pointer; }
   .card:hover { background:var(--fg); color:var(--bg); }
   .card:hover .quote { color:var(--soft); }
+  .card.used, .card.used:hover { opacity:.35; cursor:default; background:var(--bg); color:var(--fg); }
+  .card.used:hover .quote { color:var(--mid); }
+
+  /* the demo's screens before work */
+  .photos { display:grid; grid-template-columns:repeat(3, 168px); gap:10px 12px; margin-bottom:14px; }
+  .photo { padding:0; margin:0; width:168px; height:153px; border:1px solid var(--mid); background:var(--bg); overflow:hidden; }
+  .photo:hover { background:var(--bg); border-color:var(--fg); }
+  .photo img, .cell img { width:100%; height:100%; object-fit:cover; display:block; transition:opacity .2s; }
+  .photo.chosen img, .cell.chosen img, .cell.chosen .art { opacity:.3; }
+  .captcha.checklist { width:550px; min-height:630px; padding:12px 14px; display:flex; flex-direction:column; align-items:flex-start; gap:34px; }
+  .check-title { font-size:18px; font-weight:bold; margin:8px 0 6px; }
+  .checklist .check { font-size:13px; font-weight:bold; }
+  .checklist p:last-child { margin-top:auto; }
+  .statement { font-size:18px; font-weight:bold; margin:6px 0; }
+  .terms { margin:22px 0; }
+  .logo-sub + .terms { margin-top:56px; }   /* the terms start a little further from the title */
+  .terms p { max-width:none; font-weight:bold; line-height:1.9; margin:4px 0; }
+  .terms .terms-title { margin:0; }
+  .briefing { padding-top:130px; }
+  .briefing p { font-size:18px; font-weight:bold; margin:0 0 26px; max-width:none; }
+  .start { font-size:18px; font-weight:bold; padding:8px 18px; margin-top:250px; }
+
+  /* the demo's tasks */
+  .instruction { border:1px solid var(--fg); padding:6px 8px; font-weight:bold; width:450px; margin:6px 0 30px; line-height:1.35; }
+  .grid2 { display:grid; grid-template-columns:repeat(2, 218px); gap:10px 12px; }
+  .cell { width:218px; height:218px; border:1px solid var(--mid); background:var(--bg); color:var(--fg); padding:0; margin:0;
+          display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+  button.cell:hover { background:var(--bg); border-color:var(--fg); }
+  .cell .art { font-size:12px; font-weight:bold; }
+  .grid2 .cell .art { font-size:15px; }
+  .mrow { display:flex; align-items:center; gap:48px; margin-bottom:8px; }
+  .thumb.cell, .mini-cell { width:108px; height:108px; }
+  .thumb .art, .mini-cell .art { font-size:7px !important; }
+  .mopts { display:flex; gap:7px; }
+  .mopt { min-width:86px; height:42px; padding:0 8px; margin:0; font-weight:bold; text-align:left; }
+  .mopt.picked, .mopt.picked:hover { background:var(--fg); color:var(--bg); }
+  .memory { display:flex; gap:140px; align-items:flex-start; }
+  .tray { display:flex; flex-direction:column; gap:4px; }
+  .mini-cell { cursor:grab; }
+  .mini-cell.selected { outline:2px solid var(--fg); outline-offset:2px; }
+  .slot.empty { cursor:pointer; }
+  .diffs { display:flex; gap:8px; align-items:flex-start; }
+  .imgdiff { cursor:crosshair; }
+  .mark { position:absolute; width:30px; height:30px; border:2px solid var(--fg); border-radius:50%; transform:translate(-50%, -50%);
+          box-shadow:0 0 0 1px var(--bg); cursor:pointer; }
+  .textdiff { width:220px; height:60px; margin-top:76px; font-weight:bold; }
+  .textdiff .ch { cursor:crosshair; padding:1px 0; }
+  .textdiff .ch.picked { background:var(--fg); color:var(--bg); }
+  .marked { margin-top:10px; font-size:12px; }
+  .skip { display:block; width:32px; height:32px; border-radius:50%; padding:0; margin-top:120px; font-size:16px; line-height:1; }
+  .skip:disabled { opacity:.35; cursor:not-allowed; }
 
   /* images made of text */
   .art { white-space:pre; line-height:1.05; margin:0; font-family:inherit; }
@@ -141,7 +197,7 @@
   .stop:hover { background:var(--bg); color:var(--fg); }
 
   /* direct messages */
-  #modal { position:fixed; inset:0; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; z-index:50; }
+  #modal { position:fixed; inset:0; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; z-index:70; }
   #modal[hidden], #overlay[hidden] { display:none; }
   .dialog { background:var(--bg); border:1px solid var(--fg); box-shadow:6px 6px 0 var(--fg); width:min(560px, 92vw); padding:16px 20px; }
   .dialog .label { margin-top:0; }
@@ -163,18 +219,19 @@
   .card-sign { border:1px solid var(--fg); padding:16px; text-align:center; font-size:22px; font-style:italic; margin-bottom:10px; }
 
   /* full-screen moments */
-  /* the fading: a grey layer that only lightens what is darker than it, so the black background turns grey, then white, and the white text disappears into it */
-  #veil { position:fixed; inset:0; pointer-events:none; background:rgb(var(--lift), var(--lift), var(--lift)); mix-blend-mode:lighten; transition:background 2s; z-index:40; }
-  /* previous fading (a white layer that grows more opaque):
-  #veil { position:fixed; inset:0; pointer-events:none; background:var(--bg); opacity:var(--veil); transition:opacity 2s; z-index:40; } */
+  /* the fading: a black layer that grows more opaque, so everything (reviews included) sinks into the black.
+     It sits above the screen and the reviews, but below the coworkers' messages, which stay sharp. */
+  #veil { position:fixed; inset:0; pointer-events:none; background:#000; opacity:var(--veil); transition:opacity 2s; z-index:65; }
+  /* previous fading (towards white: a grey layer that only lightens what is darker than it):
+  #veil { position:fixed; inset:0; pointer-events:none; background:rgb(var(--lift), var(--lift), var(--lift)); mix-blend-mode:lighten; transition:background 2s; z-index:40; } */
   #overlay { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; overflow:hidden; background:rgba(0,0,0,.8); }
   #overlay .box { background:var(--bg); border:1px solid var(--fg); box-shadow:6px 6px 0 var(--fg); padding:24px 32px; max-width:680px; width:92vw; position:relative; z-index:2; }
   #overlay .box p { max-width:none; }
   .huge { font-size:56px; font-weight:bold; margin:10px 0 18px; letter-spacing:.04em; }
-  #overlay.gameover { background:var(--fg); }
-  #overlay.gameover .box { background:var(--fg); color:var(--bg); border-color:var(--bg); box-shadow:none; text-align:center; }
-  #overlay.gameover button { background:var(--fg); color:var(--bg); border-color:var(--bg); }
-  #overlay.gameover button:hover { background:var(--bg); color:var(--fg); }
+  #overlay.gameover { background:var(--bg); }
+  #overlay.gameover .box { box-shadow:none; text-align:center; }
+  #overlay.review .box { min-height:600px; max-width:840px; display:flex; flex-direction:column; justify-content:flex-end; align-items:flex-start; padding:40px; }
+  #overlay.review .big { font-size:34px; margin-bottom:22px; }
   .ghost { animation:flicker 3s infinite; }
   #overlay.letter { background:var(--soft); }
   #overlay.failure { background:var(--fg); }

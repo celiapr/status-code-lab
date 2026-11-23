@@ -4,6 +4,8 @@ Madrid, 2030. After the strikes against automation, a law forces every company t
 
 Developed within the Medialab Matadero residency "LAB 5 La mecánica de la verdad".
 
+This is the **demo version**: fixed tasks with photographs, one round per profile, and the path to WORKER NOT FOUND. The version before it (ASCII tasks, the Model, rest periods and surveys) is backed up in `../platform-13-backup-2026-11-23` and tagged `before-demo` in git.
+
 **Screen flow:** a map of every screen, with screenshots, is at https://claude.ai/artifact/1PhHE5PMkwVCSdB5Kwz8Ff (only people it has been shared with can open it).
 
 ## Run it
@@ -13,55 +15,59 @@ On a computer: double-click `index.html`. It opens in the browser; no installati
 
 Testing (add to the end of the address):
 - `?seconds=10` gives 10 seconds per task instead of 60.
-- `?fast` shortens every pause, and rest periods last 3 seconds.
+- `?fast` shortens every pause (and the memory grid's viewing time).
 - Both: `index.html?seconds=10&fast`
 
 ## Files
 | File | What it is |
 |---|---|
-| `content.js` | **Everything to edit**: settings, texts, workers, task images, task material, the story, endings |
-| `game.js` | Screens, the rounds (tasks, rest periods, surveys, the review), resets, the strike, endings |
-| `tasks.js` | The five kinds of task |
-| `story.js` | Messages, the "Everything OK at work?" question, the union steps, the chat |
+| `content.js` | **Everything to edit**: settings, texts, profiles, the verification images, the demo tasks, the story, endings |
+| `game.js` | Screens, the rounds (one per profile), the review, resets, the strike, endings |
+| `tasks.js` | The four kinds of task |
+| `story.js` | Messages from the coworkers, the union steps, the chat |
 | `sound.js` | Small sounds made by the browser |
 | `style.css` | Look and layout (white on black, monospace) |
 | `fonts/` | The game's font, IBM Plex Mono (free, OFL licence in `fonts/OFL.txt`). It travels with the game, so it looks the same on every computer, with no internet |
+| `img/` | The team's original images, used by the game exactly as they are (`worker1_…` = the Actor, `worker2_…` = the Cook), and the design PDF (`demo_gameover.pdf`) |
+| `img/game/` | The Software Engineer's images, made from text for now |
 | `index.html` | Page structure |
 
 ## How it plays
-1. **Human verification** (first screen, "Please show that you are human"): a CAPTCHA, "Select everything that gets tired" (a hand, an eye, a foot and a heart, among machines), and underneath, like "I accept the terms", a box: "[ ] I will die." Both done → "Verified: human." and "Continue".
-   **Login**: "Welcome to HVL · Human Validation Layer" and a name to type. The context is only in the small print underneath, in the company's own words: the Minimum Human Quota Act (13% human workers, of flesh and blood) and what human workers do on the platform. Then the **choice of worker**: the Actor (faces and bodies), the Software Engineer (patterns and logic) or the Cook (food). The name appears in the welcome message and on the list.
-2. **Work.** Tasks are drawn in ASCII and last 60 seconds each. In every task the Model's answer is already filled in (dashed outline). The player either **validates** it or **corrects** it (inverted, black). After submitting, the button only says "Submitted for review": no result is shown.
-   - Five kinds of task: identify the different element, find the differences, CAPTCHA, match the images, validate classifications.
-   - Mostly the worker's own specialisation, but sometimes a task "reassigned from another specialisation".
-   - The Model is often wrong on purpose: it marks differences that aren't there and misses obvious ones.
-3. **The round.** Always the same shape: task → rest → task → survey → task → rest → task → survey → review. The side panel shows the round, the task number and the resets remaining.
-4. **Messages and chat are always there**, on the right: the Channel, the Break room once you join, a chat box, and new direct messages ("New message from… · open"). They can be opened at any time, but the task clock keeps running. The Channel is monitored: messages about unions or strikes are withheld.
-5. **Mandatory rest period** (after tasks 1 and 3). A 30-second countdown during which work is unavailable. Only now is there time: a waiting message opens by itself. If it's still open when the rest period ends, work resumes behind it ("REST PERIOD OVER · back to work").
-6. **The survey** (after tasks 2 and 4). No clock: work resumes once it is answered. The company's **Wellbeing survey** asks **"Everything OK at work?"**, with small print: *"Your response will be taken into account in your performance evaluation."* The company implicitly asks for a good answer.
-   - From the first survey on, coworkers and disappeared workers (shown only by their ID: they've lost their name) write in the Channel, more and more often as presence drops. Each time the survey is asked, a hint in the Channel, often from someone who is no longer there, says otherwise ("Answer NO.").
-   - The player can click YES / NO or type an answer. Typed answers are read by keywords, and the game says how it understood them. Unclear answers are "normalised" to YES, and so is "back to work": the system reads doubt as compliance.
-   - **YES**: the round goes on, and the question comes back in the next survey with another wording.
-   - **NO** (the first one): Marisol writes ("hey. saw your answer to the survey…") and the road to the union opens, one message per task: join the break room, compare evaluations (your real numbers next to the others'), notice that only one of you is reset at a time, add your name to the list, and agree to stop together. The survey keeps being asked, but while the worker is with the others, the answers change nothing.
-   - **Turning a message down** has a quiet cost: that coworker stops writing, the break room goes silent (nobody answers there), and the others stop covering for the worker. The road only reopens with another NO in a survey, and it picks up at the step that was turned down.
-7. **The review** (end of the round): the only evaluation the worker sees. Each of the 4 tasks is listed as POSITIVE or NEGATIVE, with an opaque reason, and "These decisions have been added to the Model's training data." It's rigged: validating a wrong Model gets punished, and so does correcting it; accuracy never decides the result. And it always ends in "REVIEW FAILED", even when tasks come back POSITIVE: back to task 1 and one reset fewer. The work never counts. (`REVIEW_FAIL` in `content.js` can make passing possible: e.g. 2 means it fails only with 2 negatives or more.)
-8. **Disappearing.** Each failed review lowers the worker's presence: 100% → 75% → 40% → 10%. The game is white on black; with each failed review the black background gets lighter (grey, then lighter grey), so the white text sinks into it. When the worker disappears the screen turns completely white (how much it lightens at each step is set by `SCREEN_FADE`). The previous fading, a white layer over the screen, is kept commented out in `style.css` and `game.js`. Failing with no resets left → **WORKER NOT FOUND**: the worker becomes a ghost of the system (the platform never says "game over": it isn't a game, it's a workplace).
-   - Once you've joined the others, they **cover for you**: a failed review no longer costs presence. Each union step also lowers the chance of negative evaluations a little.
-9. **The strike.** After the last union message, a big STOP WORKING button (and a small "keep working"). Reaching it gives the worker their presence back. Everyone stops; the company drops to 0% human and fails the law.
-10. **Ending B:** TERMINATION OF EMPLOYMENT → SYSTEM FAILURE → **YOU WON!** ("Congratulations, comrades!", and it rains confetti).
+1. **Human verification**, two screens ("Please show that you are human."):
+   - "Select those who cannot dream": nine photos. Selected photos darken. Things (the pizza, the computer, the sock) must be selected; people and animals that dream (the singer, the man, the octopus, the dog) must not. Two are open to interpretation and count either way: the scientist who is no longer alive, and the face that may not be human.
+   - "Tick all that apply to you as a person": I was born, I think, I experience, I feel, I subjectively perceive, I will age, I will die. All of them.
+2. **Approved**: "Human validation complete. You have been approved as a human user." There is no login: the worker only gets an ID.
+3. **Terms**: the platform's own words: Human in the Loop, Humans strictly necessary, The function of humans.
+4. **Choose a profile**: the Actor, the Software Engineer or the Cook. Then "Hello, Worker.", the rules (the Model evaluates each round; "communication between workers may be monitored"), and START.
+5. **The round**: the profile's 4 tasks, always in this order, 60 seconds each:
+   1. *Identify the different element*: four images, click one (it darkens).
+   2. *Match the images*: four images, three names each; pick one name per image.
+   3. *Memory grid*: four images for a few seconds, then they disappear and come back in a column in random order; put them back in their squares (click an image, then a square; or drag it). Click a square to take an image out again.
+   4. *Find the differences*: two images; click to mark the 7 differences (click a mark to remove it). The Software Engineer compares two formulas that differ in only one sign, and still has to mark 7.
+   A task ends when it is done, or when its time runs out. Nothing tells the worker how it went.
+   The Software Engineer's images are made of text (binary blocks, drawings in characters, code and formulas), in the same style: `img/game/engineer_…`.
+6. **The arrow** (bottom left of each task) skips the task, like a one-person strike. It is always there, but it only works once the worker has accepted a message from a coworker; with the chats off, it stays disabled.
+7. **The review** at the end of the round always fails: "REVIEW FAILED · Please start again.", with the resets remaining. Then "Choose your next profile.": the profiles already used are greyed out.
+8. **Disappearing.** One round per profile: 3 profiles, 3 rounds. With each failed review the whole screen (reviews included) sinks further into black. After the third, only "REVIEW FAILED" is shown, everything goes black, and **WORKER NOT FOUND** comes out of the black. The previous fading (towards white) is kept commented out in `style.css` and `game.js`.
+9. **Messages and chat are switched off for the demo** (`CONFIG.CHATS = false`: no right column, no coworker messages, so the arrow, the strike and Ending B can't be reached). With `CONFIG.CHATS = true` they come back as before (they are still being rewritten): the Channel, the Break room once you join, the chat box, and direct messages ("New message from… · open"). Now the first coworker message arrives after the first task, with no survey before it. Turning a message down has a quiet cost: the Break room goes silent and nobody covers for the worker until they accept again; the message comes back two tasks later. Once the worker has joined, a failed review no longer costs a reset ("We covered for you.").
+10. **The strike and Ending B** are unchanged: after the last coworker message, STOP WORKING → TERMINATION OF EMPLOYMENT → SYSTEM FAILURE → YOU WON!
+
+Rest periods and surveys are switched off. To bring them back, write `"rest"` or `"survey"` in `CONFIG.ROUND`.
 
 Players who disappear are remembered on that computer: in later games their ID shows up in the Channel as a disappeared worker.
 
 ## Editing
 Everything is in `content.js`, with comments:
-- `CONFIG`: times, the shape of a round (`ROUND`: what comes after each task), how many negatives fail a review, presence values, rest periods, how wrong the Model is, how rigged the evaluation is.
+- `CONFIG`: task time, the shape of a round, the presence (fading) of each round, the memory grid's viewing time, how rigged the evaluation is.
 - `WORKERS`: the three profiles (name, quote, specialisation).
-- `TEXT`: every interface text: login page and its footnote (`TEXT.login`), onboarding, rest period, survey screen, the review, disappearance, strike, the three ending screens.
-- **Human verification:** the texts in `TEXT.select.captcha`, the images in `HUMAN_CHECK` (`tired:true` marks the right answers). These images are modelled in 3D and shaded with characters by `tools/make_images.py`; run `python3 tools/make_images.py` to rebuild them (it rewrites `HUMAN_CHECK`, so hand edits there are lost), or `python3 tools/make_images.py preview` to just look at them. They are shaded for a dark background (`DARK_BACKGROUND` in the tool).
-- **Task images** (text-based, only in the tasks): `FACES` (built from hair, brows, eyes and mouth), `POSTURES` (stick figures), `FOOD`, `CODE`. Draw them between `` String.raw` `` and `` ` ``. Never use the backtick inside an image, and if an image's last line ends with a backslash `\`, put the closing `` ` `` on a new line.
-- `WORK`: what each worker is given in each kind of task (which images, CAPTCHA prompts, pairs, labels).
-- `TASK_TEXT` and `REASONS`: task titles and instructions, the reasons shown in the review.
-- `PEOPLE` and `STORY`: the other workers, the opening messages, the question and its hints, the union steps, the break room, chat replies, ghosts, and the keywords used to read typed answers.
+- `TEXT`: every interface text: approval page (`TEXT.login`), terms (`TEXT.terms`), verification and profile screens (`TEXT.select`), "Hello, Worker" (`TEXT.onboarding`), the review, disappearance, strike, the three ending screens.
+- `VERIFY`: the photos of "Select those who cannot dream" and which ones must be selected.
+- `DEMO`: the 4 tasks of each profile (images, names, how many differences). `DEMO_TEXT`: their titles and instructions.
+- `PEOPLE` and `STORY`: the other workers and their messages.
+
+To add or change an image: put it in `img/` and write its path in `content.js`.
+
+`tools/make_images.py` belongs to the previous version (it drew the ASCII verification images); the demo doesn't use it.
 
 ## Limits
 - Typed answers are understood by keyword lists (in English, plus a few Spanish words), not by real language understanding.

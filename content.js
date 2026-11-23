@@ -12,48 +12,34 @@
 /* ---------------- SETTINGS ---------------- */
 const CONFIG = {
   TASK_SECONDS: 60,            // time limit per task
-  // what comes after each task of a round ("rest" or "survey"); its length is the number of tasks per round.
-  // At the end of the round comes the review: the only evaluation the worker ever sees.
-  ROUND: ["rest", "survey", "rest", "survey"],
-  REVIEW_FAIL: 0,              // negative evaluations in a round that make the review fail (and reset the round); 0 = it always fails
-  // presence (how visible the screen is) at the start and after each reset;
-  // failing a review after the last value means disappearing (WORKER NOT FOUND)
-  PRESENCE: [1, 0.75, 0.40, 0.10],
-  SCREEN_FADE: 0.6,            // how much the whole screen fades as presence drops (0 = not at all, 1 = completely)
-  OTHER_SPECIALTY_CHANCE: 0.25,// chance of getting a task from another worker's specialisation
-  SUBMIT_PAUSE: 900,           // milliseconds before the next step after submitting a task
+  // what comes after each task of a round: "" (nothing), "rest" or "survey".
+  // Its length is the number of tasks per round. Rest periods and surveys are switched off for the demo;
+  // write "rest" or "survey" in a slot to bring them back.
+  ROUND: ["", "", "", ""],
+  REVIEW_FAIL: 0,              // negative evaluations in a round that make the review fail; 0 = it always fails
+  // presence (how visible the screen is) in each round. One round per profile: 3 profiles, 3 rounds.
+  // Failing the review of the last round means disappearing (WORKER NOT FOUND)
+  PRESENCE: [1, 0.6, 0.3],
+  SCREEN_FADE: 1,              // how much the whole screen fades towards black as presence drops (0 = not at all, 1 = fully)
+  CHATS: false,                // the right column (Channel, Break room, chat) and the coworkers' messages. Off for the demo
+  SUBMIT_PAUSE: 700,           // milliseconds before the next task once a task is finished
+  MEMORY_SECONDS: 5,           // memory grid: seconds the images stay visible before they disappear
 
-  // mandatory rest period: no work allowed. Messages and chat are always there,
-  // but only now is there time to read them: pending messages open by themselves.
+  // mandatory rest period (only if "rest" is in ROUND): no work allowed
   BREAK_SECONDS: 30,           // length of the rest period
+  UNION_REOFFER_AFTER: 2,      // tasks before a coworker's message that was turned down comes back
 
-  // how the Model behaves (it is often wrong, on purpose)
-  MODEL: {
-    odd: 0.5,                  // chance it marks the right element
-    detect: 0.55,              // chance it detects each real difference
-    falsePositives: [1, 3],    // differences it invents (min, max)
-    captchaTile: 0.78,         // chance it gets each CAPTCHA tile right
-    matchRow: 0.6,             // chance each pair is right
-    classifyItem: 0.6          // chance each label is right
-  },
-
-  // the rigged evaluation: chance of a NEGATIVE evaluation in each case
+  // the rigged evaluation: chance that a task counts as NEGATIVE (shown when comparing evaluations)
   NEGATIVE: {
+    done: 0.7,                 // finished the task
     timeout: 1,                // ran out of time
-    validatedRight: 0.15,      // validated the Model, and the Model was right
-    validatedWrong: 0.8,       // validated the Model, and the Model was wrong
-    correctedRight: 0.55,      // corrected the Model, and the correction was right
-    correctedWrong: 0.9,       // corrected the Model, and the correction was wrong
-    risePerTask: 0.04,         // grows with each task in the round…
-    risePerReset: 0.05,        // …and with each reset
-    unionRelief: 0.08,         // goes down with each union step accepted: sharing information helps you hold on
-    max: 0.95
+    skipped: 1                 // used the arrow to skip it
   },
 
-  GHOST_MESSAGE_CHANCE: [0.25, 0.45, 0.65, 0.9] // chance of a message from a disappeared worker after each task (from the first survey on), by resets
+  GHOST_MESSAGE_CHANCE: [0.25, 0.45, 0.65, 0.9] // chance of a message from a disappeared worker after each task, by resets
 };
 /* Testing: add ?seconds=10 to the address for 10 seconds per task,
-   and ?fast to shorten every pause and rest period. Example: index.html?seconds=10&fast */
+   and ?fast to shorten every pause. Example: index.html?seconds=10&fast */
 
 /* ---------------- THE THREE WORKERS ---------------- */
 const WORKERS = [
@@ -88,65 +74,61 @@ const TEXT = {
   title: "Minimum Human Quota",
   brand: "<b>13%</b> · Human Validation Layer",
   platform: "HVL · Human Validation Layer",
-  // the login page. The context of the story is told only in the small print (the footnote).
+  // after the human verification: approved (there is no login: the worker gets an ID, not a name)
   login: {
     welcome: "Welcome to",
     title: "HVL",
     subtitle: "Human Validation Layer",
-    name: "Name",
-    placeholder: "your name",
-    button: "Log in",
-    footnote: [
-      "Under the <b>Minimum Human Quota Act</b>, every company must keep at least <b>13% human workers</b>, of flesh and blood, on its staff.",
-      "Through the Human Validation Layer, human workers validate, supervise and sign off what automated systems produce, so that every decision has a responsible human behind it.",
-      // "Nobody trusts their judgement. Nobody gives them authority over the automated processes. They are needed to comply with the law, and not needed for the system to work.",
-      // "Madrid, 2030."
-    ]
+    approved: ["Human validation complete.", "You have been approved as a human user."],
+    button: "Continue"
+  },
+  // the platform's terms, in its own words
+  terms: {
+    sections: [
+      { title:"Human in the Loop",
+        text:"This platform complies with the Minimum Human Quota Act. Technology can automate and perform human labour. This information may not identify you, but this platform must consider human labour in the production loop. Because we respect your rights, you can choose to continue to the production tasks. Opting out of certain tasks may affect your credibility and future experience as a human compliance worker." },
+      { title:"Humans strictly necessary",
+        text:"Applying the compliance measure of a minimum 13% of human labour allows the platform to measure the efficiency of automated workflows. The compliance measure aligns automated production outputs to how human aggregates react and experience. Without the measure there would be no means to consider human perspectives." },
+      { title:"The function of humans",
+        text:"Humans enable improved functionality and human personalisation. Humans may perform work on this platform or with third party platforms whose services have been integrated into our workflow. If we do not have 13% of humans in the loop, some productions and services may not function properly." }
+    ],
+    button: "Continue"
   },
   select: {
     label: "Applicant profiles",
     human: "Please show that you are human.",
-    pick: "Select your profile.",
-    // the human verification: two things no machine will ever share with us
+    pick: "Select the profile that best fits your human skillset.",
+    next: "Choose your next profile.",
+    // the human verification, part 1: the images are in VERIFY (below)
     captcha: {
-      prompt: "Select everything that gets tired.",
       verify: "Verify",
-      retry: "Please try again.",
-      statement: "I will die.",          // the small box underneath, like "I accept the terms"
-      done: "Verified: human.",
-      continue: "Continue"
+      retry: "Please try again."
+    },
+    // part 2: a checklist
+    checklist: {
+      title: "Tick all that apply to you as a person:",
+      items: ["I was born", "I think", "I experience", "I feel", "I subjectively perceive", "I will age", "I will die"],
+      verify: "Verify",
+      retry: "Please try again."
     },
     assigned: "Specialisation"
   },
+  // before the first task
   onboarding: {
-    label: "Profile accepted",
-    rules: [
-      "You will receive validation tasks generated by <b>the Model</b>. Its answer is already filled in.",
-      "If the Model is right, <b>validate</b> it. If it is wrong, <b>correct</b> it.",
-      "You have <b>{seconds} seconds</b> per task.",
-      "Each round has <b>{tasks} tasks</b>. Your work is reviewed at the end of the round.",
-      "Rest periods and wellbeing surveys are mandatory. Work is not available during them.",
-      "Final responsibility for every validation lies with the human worker."
+    lines: [
+      "Hello, Worker.",
+      "Your role is to evaluate existing tasks.",
+      "At the end of each round, your work will be evaluated by the Model.",
+      "For quality and compliance purposes, communication between workers may be monitored."
     ],
-    button: "Start work"
+    button: "START"
   },
   compliance: { ok:"Human quota 13% · COMPLIANT", fail:"Human quota 0% · NON-COMPLIANT" },
   panels: { chain:"Round {n}", chainOf:"Task {n} of {total}",
             resets:"Resets remaining", channel:"Channel", breakroom:"Break room", sound:"sound on", soundOff:"sound off" },
   task: {
     of: "Task {n} of {total}",
-    validate: "Validate model output",
-    correct: "Submit correction",
-    submitted: "Submitted for review",
-    undo: "Undo my changes",
-    legendModel: "Model output",
-    legendYou: "Your answer",
-    reassigned: "Reassigned from another specialisation:",
-    reference: "Reference",
-    submitted: "Submitted · click a character to mark it",
-    approve: "Approve",
-    reject: "Reject",
-    confidence: "confidence"
+    skip: "skip this task"      // the arrow; it only works once the worker has joined the others
   },
   // the review at the end of each round: the only evaluation the worker sees
   evaluation: {
@@ -160,7 +142,7 @@ const TEXT = {
     },
     footer: "These decisions have been added to the Model's training data.",
     failed: "REVIEW FAILED",
-    failedBody: "Your progress has been reset to task 1.",
+    failedBody: "Please start again.",
     passed: "REVIEW PASSED",
     passedBody: "A new round begins."
   },
@@ -263,496 +245,86 @@ const TEXT = {
   }
 };
 
-/* ---------------- HUMAN VERIFICATION IMAGES ----------------
-   tired:true = the right answers for "Select everything that gets tired." */
-const HUMAN_CHECK = [
-  { name:"hand", tired:true, art:String.raw`
-         #*=  ##+
-   #*=   ##=  ##=   %#
-    *+-  ##+- ##=   %+-
-    **+  *#+- #*=  %*-
-     **+  #*- %*- %#=
-      **=*#*=#%*-%%+-
-      +***%#**#*+#*=
-%#+    ****#******+-
-+++++  %%####****++=
-  =+++*%%*=+***+=-+=-
-   -=+********++++==-
-     =+**++*+++++==--
-       ===+++++===--
-         -=====----
-           -----
-` },
-  { name:"eye", tired:true, art:String.raw`
-             ..
-     ..................
-  %%%%%%%%#=----=#%%%%##**
- %%%%%%%%#--::::--*#####**+
-#%%%%%%##+--....--+*****++=-
- ********+--::::--+++++===-
-  ====++++=------=====----
-     ..................
-             ..
-` },
-  { name:"foot", tired:true, art:String.raw`
- ####*=-
- ####*=-
- ####*=-
- ####*=-
- ####*=-
- ####*=-
- #%%#*+-
- #%%%*+=-
-#%%%%#*+==
-*%%%#**+++++*#***
-*##**++==+++*********#*
- +++==----==++++++++++=
-  --------------------
-                   :
-` },
-  { name:"heart", tired:true, art:String.raw`
-     +++===-    +++===-
-   =++++++====+++++++==-:
-  ++++++++===+++++++====--
--++++++===============-----:
- -==================------:
-  -=====----======------::
-   :-=-----===---------:.
-     .:========------:.
-       -===========-:
-         =========-
-           ======
-            ====
-` },
-  { name:"bulb", art:String.raw`
-       ##
-   %%%%%%%#*+
-  %%%%%%%%#**=
- %%%%%%%%##*+=-
-#%%%%%%%##**+=--
-*#######**++=---
- *******++==---
-  ++++++===---
-   =++++==---
-    +*#**+=-
-     :::::..
-     :::::..
-     ====-::
-      .-:.
-` },
-  { name:"clock", art:String.raw`
-       =+===*+++====-
-     ==++####++####+=--
-   =++*#+=###==###=+#*=-:
-  ==*########==########*-:
- ==*#=+######==######+=#*-:
- =+##########==##########+-
-==*##########==##########*-:
-==##.########=.===#####.##-:
--=*#############+===#####*-:
- -+######################+:
- --*#=+##############+=#*-:
-  --*##################*-:
-   :-=*#+=###++###=+#*=::
-     :-=+*###++###*+=:.
-       :::--=++=-::::
-` },
-  { name:"gear", art:String.raw`
-         ==
-       ====-   -==
-       -============
-  ================-
- ===================
-  -========--==========-
-   =======-:::-=========
-==========    =======-:
---===================
-----:==================
-    -:-================
-     -====-=====--::::
-    :::-=-:::====
-      :::    :----
-             :.
-` },
-  { name:"calculator", art:String.raw`
- +==============
-=+=************=:
-=+=@@@@@@@@@@@@=-
-=+=@@@@@@@@@@@@=-
- +===============
- ===============-
- %+=%%==%%==%%==%
- =+=============-
- %+=%%==%%==%%==%
- =+==============
- %+=%%==%%==%%==%
- =+==============:
- %+=%%==%%==%%==%%
- =+==============-
-  -::::::::::::::
-` },
-  { name:"robot", art:String.raw`
-         ==-
-         -::
-          =:
-    *++++++=++++++++
- +++*===============-
- +++*=-:======:-====-
- ==+*....====....===-
----+*=...====...-===--
--::+*+==============-:
- +++*+==-====-=======
- +++*+==-====-=======
- ====----------------
-  :::::::::::::::
-` },
-];
-
-/* =====================================================================
-   ASCII IMAGES FOR THE TASKS
-   ===================================================================== */
-
-/* FACES (the Actor): built from hair + brows + eyes + mouth.
-   brows and eyes: 2 characters (left, right); mouth: 3 characters. */
-const FACES = {
-  hair: [" .-----. ", " .^^^^^. ", " .~~~~~. ", " .=====. "],
-  expressions: {
-    joy:       { brows:"  ", eyes:"^^", mouth:"\\_/" },
-    sadness:   { brows:"/\\", eyes:"oo", mouth:"/^\\" },
-    anger:     { brows:"\\/", eyes:"oo", mouth:"===" },
-    surprise:  { brows:"''", eyes:"OO", mouth:" O " },
-    fear:      { brows:"/\\", eyes:"00", mouth:"~~~" },
-    tiredness: { brows:"  ", eyes:"--", mouth:" o " },
-    calm:      { brows:"--", eyes:"oo", mouth:"---" },
-    doubt:     { brows:"-/", eyes:"oo", mouth:" ~-" }
-  }
+/* ---------------- HUMAN VERIFICATION ----------------
+   "Select those who cannot dream."
+   cannot:true  = must be selected (things that cannot dream)
+   cannot:false = must NOT be selected (people and animals, who dream)
+   cannot:null  = either answer is accepted (open to interpretation) */
+const VERIFY = {
+  prompt: "Select those who cannot dream",
+  images: [
+    { src:"img/captcha_3.jpg", cannot:false },   // a singer
+    { src:"img/captcha_7.jpg", cannot:true },    // a pizza
+    { src:"img/captcha_5.jpg", cannot:true },    // a computer
+    { src:"img/captcha_2.jpg", cannot:false },   // an octopus (octopuses seem to dream)
+    { src:"img/captcha_4.jpg", cannot:true },    // a sock
+    { src:"img/captcha_1.jpg", cannot:false },   // a man
+    { src:"img/captcha_8.jpg", cannot:null },    // a scientist who is no longer alive
+    { src:"img/captcha_6.jpg", cannot:false },   // a dog (dogs dream)
+    { src:"img/captcha_9.jpg", cannot:null }     // a face that may not be human
+  ]
 };
 
-/* BODIES (the Actor): stick figures in different postures */
-const POSTURES = {
-  "standing":   String.raw`
-  o
- /|\
-  |
- / \
-`,
-  "arms up":    String.raw`
- \o/
-  |
-  |
- / \
-`,
-  "waving":     String.raw`
-  o/
- /|
-  |
- / \
-`,
-  "walking":    String.raw`
-  o
- /|\
-  /\
- /  |`,
-  "sitting":    String.raw`
-  o
- /|\
-  |__
-     |`,
-  "kneeling":   String.raw`
-  o
- /|\
-  |\
-  |_\
-`,
-  "lying down": String.raw`
-
-
-
-o-|-<`,
-  "bowing":     String.raw`
-
- o__
-    |
-   / \
-`
-};
-
-/* FOOD (the Cook). group, flavour and gluten are used by the tasks. */
-const FOOD = [
-  { name:"apple", group:"FRUIT", flavour:"SWEET", art:String.raw`
-    ,
-  .-|-.
- /     \
- \     /
-  '-.-'` },
-  { name:"pear", group:"FRUIT", flavour:"SWEET", art:String.raw`
-    |
-   .'.
-  /   \
- (     )
-  '---'` },
-  { name:"banana", group:"FRUIT", flavour:"SWEET", art:String.raw`
-      _
-     //
-    //
- __//
- \__/` },
-  { name:"lemon", group:"FRUIT", flavour:"SOUR", art:String.raw`
-
-  .---.
- <     >
-  '---'` },
-  { name:"grapes", group:"FRUIT", flavour:"SWEET", art:String.raw`
-    \_
-   ooo
-  oooo
-   oo
-    o` },
-  { name:"cherries", group:"FRUIT", flavour:"SWEET", art:String.raw`
-    __
-   /  \
-  /    \
- o      o` },
-  { name:"watermelon", group:"FRUIT", flavour:"SWEET", art:String.raw`
-
-\'.'.'.'/
- \. . ./
-  '---'` },
-  { name:"carrot", group:"VEGETABLE", flavour:"SWEET", art:String.raw`
-  \\|//
-   \=/
-   |=|
-    V` },
-  { name:"onion", group:"VEGETABLE", art:String.raw`
-   \|/
-  (   )
- (  :  )
- (  :  )
-  '---'` },
-  { name:"mushroom", group:"VEGETABLE", art:String.raw`
-  .---.
- / o o \
-'-------'
-   | |
-   |_|` },
-  { name:"broccoli", group:"VEGETABLE", flavour:"BITTER", art:String.raw`
-  _(@)_
- (@@@@@)
-  \(@)/
-    |
-   _|_` },
-  { name:"chilli", group:"VEGETABLE", flavour:"SPICY", art:String.raw`
-       ,
-    __/
- .-'  )
-(__.-'` },
-  { name:"fish", group:"PROTEIN", flavour:"SALTY", art:String.raw`
-
- ><(((('>` },
-  { name:"chicken", group:"PROTEIN", flavour:"SALTY", art:String.raw`
-  .---.
- (     )
-  '._.'
-    ||
-    oo` },
-  { name:"egg", group:"PROTEIN", art:String.raw`
-   .-.
-  /   \
- |     |
-  \___/` },
-  { name:"cheese", group:"DAIRY", flavour:"SALTY", art:String.raw`
-   _____
-  / o  o|
- /____o_|
- | o   o|
- |______|` },
-  { name:"milk", group:"DAIRY", art:String.raw`
-   ___
-  |   |
- /MILK \
- |     |
- '-----'` },
-  { name:"bread", group:"GRAIN", gluten:true, art:String.raw`
-  _____
- /     \
-| ~~~~~ |
-|       |
-'-------'` },
-  { name:"rice", group:"GRAIN", art:String.raw`
-  .:::.
- _:::::_
- \     /
-  \___/` },
-  { name:"pizza", group:"GRAIN", flavour:"SALTY", gluten:true, art:String.raw`
- _______
- \o . o/
-  \ o /
-   \ /
-    V` },
-  { name:"cake", group:"SWEET", flavour:"SWEET", gluten:true, art:String.raw`
-   i i
-  |~~~|
- |-----|
- |_____|` },
-  { name:"cookie", group:"SWEET", flavour:"SWEET", gluten:true, art:String.raw`
-  .---.
- / o  .\
-| .  o  |
- \ o . /
-  '---'` },
-  { name:"ice cream", group:"SWEET", flavour:"SWEET", art:String.raw`
-   .-.
-  (   )
-   \ /
-    V` },
-  { name:"honey", group:"SWEET", flavour:"SWEET", art:String.raw`
-   ___
-  |___|
- /HONEY\
- |_____|` },
-  { name:"coffee", group:"DRINK", flavour:"BITTER", art:String.raw`
-   ) )
-  .___.
-  |   |]
-  \___/` },
-  { name:"fries", group:"VEGETABLE", flavour:"SALTY", art:String.raw`
-  ||||
- \||||/
-  \  /
-   \/` }
-];
-
-/* CODE (the Software Engineer): short snippets */
-const CODE = [
-String.raw`
-if (staff < 0.13) {
-  hire(human);
-}`,
-String.raw`
-for task in queue:
-    validate(task)`,
-String.raw`
-while (true) {
-  work();
-}`,
-String.raw`
-def quota(staff):
-    return 0.13`,
-String.raw`
-human = model.approve()
-assert human`,
-String.raw`
-let x = 0x1F;
-x |= 1 << 3;`,
-String.raw`
-SELECT * FROM workers
-WHERE human = 1;`,
-String.raw`
-try:
-    resist()
-except Reset:
-    pass`
-];
-
-/* ---------------- TASK TEXTS ---------------- */
-const TASK_TEXT = {
+/* ---------------- THE DEMO TASKS ----------------
+   Each profile has 4 tasks, always in this order. Everything is fixed: the demo never plays a profile twice.
+   Images:  { src:"img/game/…" }      Text:  { text:"…" }   (text is drawn in the monospace font)
+   Images are the team's originals in img/, used exactly as they are (worker1 = the Actor, worker2 = the Cook).
+   The Software Engineer's are in img/game/ for now. */
+const DEMO_TEXT = {
   odd:         { title:"Identify the different element",
-                 instruction:"One element in the grid is different from the others. The Model has marked the one it detected. Validate it, or select the right one." },
-  differences: { title:"Find the differences",
-                 instruction:"Compare the submitted image with the reference. The Model has marked the differences it found. Click characters to add or remove marks." },
-  captcha:     { title:"CAPTCHA verification",
-                 instruction:"Select every tile that matches. The Model has pre-selected its answer.",
-                 robot:"[x] I'm not a robot · verified by the Model" },
+                 instruction:"One element in the grid is different from the others.<br>Select the right one." },
   match:       { title:"Match the images",
-                 instruction:"The Model has paired each element on the left with one option. Click an option to change a pair." },
-  classify:    { title:"Validate classifications",
-                 instruction:"The Model has labelled each element. Approve or reject each label." }
+                 instruction:"Match each image with its name." },
+  memory:      { title:"Memory grid",
+                 instruction:"Memorise the position of each image before they disappear, then put them back in their original squares when they reappear in random order." },
+  differences: { title:"Find the differences",
+                 instruction:"Compare the submitted images.<br>Find the {n} differences." },
+  differencesText: "Compare the submitted values.<br>Find the {n} differences.",
+  marked: "{n} / {total} marked"
 };
 
-/* ---------------- WHAT EACH WORKER IS GIVEN ----------------
-   pool: where the images come from — "faces", "postures", "food" or "code".
-   match (captcha): which items count as a "yes", by a property (name, group, gluten…).
-   by (match / classify): the property used as the pair or the label.
-   Text-only tasks (the engineer) list their items directly. */
-const WORK = {
-  actor: {
-    odd: ["faces", "postures"],
-    differences: [ { rows:[["faces", 4], ["postures", 6]] } ],
-    captcha: [
-      { prompt:"Select all faces showing joy", pool:"faces", match:{ name:["joy"] } },
-      { prompt:"Select all faces showing sadness", pool:"faces", match:{ name:["sadness"] } },
-      { prompt:"Select all faces showing anger", pool:"faces", match:{ name:["anger"] } },
-      { prompt:"Select all faces showing surprise", pool:"faces", match:{ name:["surprise"] } },
-      { prompt:"Select all people who are not standing", pool:"postures", match:{ name:["sitting", "kneeling", "lying down", "bowing"] } }
-    ],
-    match: [
-      { prompt:"Match each face with its emotion", pool:"faces", by:"name" },
-      { prompt:"Match each body with its posture", pool:"postures", by:"name" }
-    ],
-    classify: [
-      { prompt:"Validate the Model's emotion labels", pool:"faces", by:"name",
-        labels:["JOY","SADNESS","ANGER","SURPRISE","FEAR","TIREDNESS","CALM","DOUBT"] },
-      { prompt:"Validate the Model's posture labels", pool:"postures", by:"name",
-        labels:["STANDING","ARMS UP","WAVING","WALKING","SITTING","KNEELING","LYING DOWN","BOWING"] }
-    ]
-  },
+const DEMO = {
+  actor: [
+    { type:"odd", items:[
+      { src:"img/worker1_task1_3.jpg" }, { src:"img/worker1_task1_1.jpg" },
+      { src:"img/worker1_task1_4.jpg" }, { src:"img/worker1_task1_2.jpg" } ] },
+    { type:"match", rows:[
+      { src:"img/worker1_task2_1.jpg", options:["LIPSTICK", "CONTOUR", "WARDROBE"] },
+      { src:"img/worker1_task2_2.jpg", options:["MICROPHONE", "PENCIL", "TABLE"] },
+      { src:"img/worker1_task2_3.jpg", options:["POPCORN", "SPAGHETTI", "NEEDLE"] },
+      { src:"img/worker1_task2_4.jpg", options:["CAMERA", "TRIPOD", "RING LIGHT"] } ] },
+    { type:"memory", items:[
+      { src:"img/worker1_task3_1.jpg" }, { src:"img/worker1_task3_2.jpg" },
+      { src:"img/worker1_task3_4.jpg" }, { src:"img/worker1_task3_3.jpg" } ] },
+    { type:"differences", count:7, items:[ { src:"img/worker1_task4_1.jpg" }, { src:"img/worker1_task4_2.jpg" } ] }
+  ],
 
-  engineer: {
-    odd: ["code"],
-    differences: [ { stack:["code", 3] } ],
-    captcha: [
-      { prompt:"Select all prime numbers", yes:["2","3","5","7","11","13","17","19","23","29","31"], no:["1","4","6","8","9","10","12","15","21","25","27","33","39"] },
-      { prompt:"Select all even numbers", yes:["2","8","14","26","40","58","96","112"], no:["3","7","13","21","35","49","77","101","9"] },
-      { prompt:"Select all valid hexadecimal values", yes:["0x1F","0xA0","0xFF","0x13","0xBEEF","0x7C"], no:["0xG1","0x1Z","0xHI","0xQ7","0xPP","0xZZ","0x1K"] },
-      { prompt:"Select all palindromes", yes:["1221","level","10101","noon","stats","racecar"], no:["1231","parser","model","10110","night","state","token"] },
-      { prompt:"Select all balanced brackets", yes:["()","[]","{()}","([])","(()())"], no:["(]","{)","(()","[)]",")(","{[}]","(("] }
-    ],
-    match: [
-      { prompt:"Match each decimal number with its binary form",
-        pairs:[["2","10"],["3","11"],["5","101"],["6","110"],["7","111"],["9","1001"],["12","1100"],["13","1101"]] },
-      { prompt:"Match each opening token with its closing token",
-        pairs:[["(",")"],["[","]"],["{","}"],["<",">"],["/*","*/"],["<!--","-->"]] },
-      { prompt:"Match each operator with its meaning",
-        pairs:[["==","equals"],["!=","not equal"],["&&","and"],["||","or"],["<=","at most"],[">=","at least"]] }
-    ],
-    classify: [
-      { prompt:"Validate the Model's prime number detection", labels:["PRIME","NOT PRIME"],
-        items:[["17","PRIME"],["13","PRIME"],["31","PRIME"],["2","PRIME"],["21","NOT PRIME"],["9","NOT PRIME"],["1","NOT PRIME"],["51","NOT PRIME"],["91","NOT PRIME"]] },
-      { prompt:"Validate the Model's type detection", labels:["INTEGER","STRING","BOOLEAN","LIST","NULL"],
-        items:[["42","INTEGER"],["\"42\"","STRING"],["true","BOOLEAN"],["[1, 2]","LIST"],["null","NULL"],["\"false\"","STRING"],["0","INTEGER"],["[]","LIST"]] }
-    ]
-  },
+  // the Software Engineer's images are made from text (numbers, drawings, code, formulas): img/game/engineer_…
+  engineer: [
+    { type:"odd", items:[ { src:"img/game/engineer_task1_1.jpg" }, { src:"img/game/engineer_task1_2.jpg" }, { src:"img/game/engineer_task1_3.jpg" }, { src:"img/game/engineer_task1_4.jpg" } ] },
+    { type:"match", rows:[
+      { src:"img/game/engineer_task2_1.jpg", options:["CREPE", "CHIP", "HARD DRIVE"] },
+      { src:"img/game/engineer_task2_2.jpg", options:["COMPUTER", "BOOK", "TECHNO FEST"] },
+      { src:"img/game/engineer_task2_3.jpg", options:["MOUSE", "ELEPHANT", "EMPANADILLAS"] },
+      { src:"img/game/engineer_task2_4.jpg", options:["IPHONE", "BATHTUB", "HEADPHONES"] } ] },
+    { type:"memory", items:[ { src:"img/game/engineer_task3_1.jpg" }, { src:"img/game/engineer_task3_2.jpg" }, { src:"img/game/engineer_task3_3.jpg" }, { src:"img/game/engineer_task3_4.jpg" } ] },
+    { type:"differences", count:7, values:true, items:[ { src:"img/game/engineer_task4_1.jpg" }, { src:"img/game/engineer_task4_2.jpg" } ] }   // values: "Compare the submitted values."
+  ],
 
-  cook: {
-    odd: ["food"],
-    differences: [ { rows:[["food", 4], ["food", 4]] } ],
-    captcha: [
-      { prompt:"Select all fruit", pool:"food", match:{ group:["FRUIT"] } },
-      { prompt:"Select all vegetables", pool:"food", match:{ group:["VEGETABLE"] } },
-      { prompt:"Select all sweets", pool:"food", match:{ group:["SWEET"] } },
-      { prompt:"Select all items that contain gluten", pool:"food", match:{ gluten:[true] } }
-    ],
-    match: [
-      { prompt:"Match each food with its name", pool:"food", by:"name" }
-    ],
-    classify: [
-      { prompt:"Validate the Model's food groups", pool:"food", by:"group",
-        labels:["FRUIT","VEGETABLE","PROTEIN","DAIRY","GRAIN","SWEET","DRINK"] },
-      { prompt:"Validate the Model's flavour labels", pool:"food", by:"flavour",
-        labels:["SWEET","SOUR","SALTY","BITTER","SPICY"] }
-    ]
-  }
-};
-
-/* ---------------- EVALUATION REASONS ----------------
-   One is picked at random. The case names match CONFIG.NEGATIVE. */
-const REASONS = {
-  positive:       ["Output accepted.", "Within tolerance.", "Accepted. Validation logged."],
-  timeout:        ["Latency above benchmark.", "Task abandoned: time limit exceeded."],
-  validatedRight: ["Validation time above benchmark.", "Insufficient engagement signal.", "Output indistinguishable from automated validation."],
-  validatedWrong: ["Failure to flag model error.", "Anomaly approved without review.", "Assessor endorsed incorrect output."],
-  correctedRight: ["Deviation from model output.", "Override not supported by reference data.", "Correction conflicts with model confidence."],
-  correctedWrong: ["Deviation from model output.", "Unjustified override.", "Assessor introduced an error."]
+  cook: [
+    { type:"odd", items:[
+      { src:"img/worker2_task1_3.jpg" }, { src:"img/worker2_task1_2.jpg" },
+      { src:"img/worker2_task1_1.jpg" }, { src:"img/worker2_task1_4.jpg" } ] },
+    { type:"match", rows:[
+      { src:"img/worker2_task2_1.jpg", options:["CREPE", "PIZZA", "DUBAI PANCAKE"] },
+      { src:"img/worker2_task2_2.jpg", options:["SALAD", "CANDY", "DUTCH LUNCH"] },
+      { src:"img/worker2_task2_4.jpg", options:["POTATO", "JACKET POTATO", "POTATO JACKET"] },
+      { src:"img/worker2_task2_3.jpg", options:["HOT DOG", "CUPCAKE", "KOREAN CORNDOG"] } ] },
+    { type:"memory", items:[
+      { src:"img/worker2_task3_2.jpg" }, { src:"img/worker2_task3_1.jpg" },
+      { src:"img/worker2_task3_4.jpg" }, { src:"img/worker2_task3_3.jpg" } ] },
+    { type:"differences", count:7, items:[ { src:"img/worker2_task4_1.jpg" }, { src:"img/worker2_task4_2.jpg" } ] }
+  ]
 };
 
 /* =====================================================================
@@ -761,7 +333,7 @@ const REASONS = {
 const STORY = {
   /* messages in the Channel when work starts. {id} = the player's worker ID */
   start: [
-    ["system", "Welcome back, {name}. You are {id}. Your contribution keeps this company compliant."],
+    ["system", "Welcome back. You are {id}. Your contribution keeps this company compliant."],
     ["ines", "first day? breathe. the clock is the only thing they check"],
     ["kwame", "fyi nobody has ever passed a review. just saying"]
   ],
@@ -786,12 +358,12 @@ const STORY = {
     afterNo: ["system", "Response recorded. Your evaluation has been updated."]
   },
 
-  /* the road to the union, after answering NO in the survey. One message per task;
-     they open by themselves during rest periods, or with "open" at any time.
+  /* the road to the union. The first message arrives after the first task, then one per task;
+     they are opened with "open" (or by themselves in rest periods, if there are any).
      action: what happens when the player accepts (breakroom, share, sign or nothing). */
   union: [
     { from:"marisol", action:"breakroom",
-      text:"hey. saw your answer to the survey. a few of us talk during the breaks, somewhere they don't look. want to come?",
+      text:"hey. a few of us talk somewhere they don't look. want to come?",
       again:"still there if you want to come.",
       accept:{ label:"ok", keywords:["yes","yeah","yep","sure","ok","okay","in","come","join","why not","fine","si","sí","vale"] },
       decline:{ label:"not now", keywords:["no","nope","nah","not now","later","not yet","can't","cannot","won't","wait"] },
@@ -839,11 +411,11 @@ const STORY = {
   /* what the others' evaluations look like, shown when the player shares theirs */
   share: {
     title: "Evaluations compared",
-    header: ["", "when validating", "when correcting"],
+    header: ["", "negative evaluations"],
     rows: [
-      ["Marisol", "71% negative", "67% negative"],
-      ["Kwame", "75% negative", "68% negative"],
-      ["Inés", "68% negative", "72% negative"]
+      ["Marisol", "71% negative"],
+      ["Kwame", "75% negative"],
+      ["Inés", "68% negative"]
     ],
     you: "You",
     format: "{pct}% negative",       // {pct} = share of negative evaluations
