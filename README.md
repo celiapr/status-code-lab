@@ -9,7 +9,7 @@ This is the **demo version**: fixed tasks with photographs, one round per profil
 **Screen flow:** a map of every screen, with screenshots, is at https://claude.ai/artifact/1PhHE5PMkwVCSdB5Kwz8Ff (only people it has been shared with can open it).
 
 ## Run it
-Online: **https://celiapr.github.io/status-code-lab/** (published with GitHub Pages from the repository `celiapr/status-code-lab`; every change pushed to `main` goes live in a minute or two). After changing any file, raise the number in `?v=3` in `index.html` (to `?v=4`, and so on), so browsers that already opened the game load the new version instead of the one they remember.
+Online: **https://celiapr.github.io/status-code-lab/** (published with GitHub Pages from the repository `celiapr/status-code-lab`; every change pushed to `main` goes live in a minute or two). After changing any file, raise the number in `?v=4` in `index.html` (to `?v=5`, and so on), so browsers that already opened the game load the new version instead of the one they remember.
 
 On a computer: double-click `index.html`. It opens in the browser; no installation or internet needed.
 
@@ -29,8 +29,7 @@ Testing (add to the end of the address):
 | `style.css` | Look and layout (white on black, monospace) |
 | `fonts/` | The game's font, IBM Plex Mono (free, OFL licence in `fonts/OFL.txt`). It travels with the game, so it looks the same on every computer, with no internet |
 | `img/` | The team's original images, used by the game exactly as they are (`worker1_…` = the Actor, `worker2_…` = the Cook), and the design PDF (`demo_gameover.pdf`) |
-| `img/engineer/` | The Software Engineer's photos (the match task), used exactly as they are |
-| `img/game/` | Placeholder images for the Software Engineer's memory grid, made from code, until there are real ones |
+| `img/engineer/` | The Software Engineer's photos (the match), used exactly as they are |
 | `index.html` | Page structure |
 
 ## How it plays
@@ -46,7 +45,7 @@ Testing (add to the end of the address):
    3. *Memory grid*: four images for a few seconds, then they disappear and come back in a column in random order; put them back in their squares (click an image, then a square; or drag it). Click a square to take an image out again.
    4. *Find the differences*: two images; click to mark the 7 differences (click a mark to remove it). The Software Engineer compares two formulas that differ in only one sign, and still has to mark 7.
    A task ends when it is done, or when its time runs out. Nothing tells the worker how it went.
-   The Software Engineer, as in the PDF: the different element (binary blocks) and the differences (two formulas) are text; the match uses the team's photos in `img/engineer/`; the memory grid, which isn't in the PDF, uses placeholder images of code (`img/game/engineer_task3_…`).
+   The Software Engineer, as in the PDF: the different element (binary blocks) and the differences (two formulas) are text; the match uses the team's photos in `img/engineer/`, as in the PDF; the memory grid, which isn't in the PDF, shows four short pieces of code as text until there are images.
 6. **The arrow** (bottom left of each task) skips the task, like a one-person strike. It is always there, but it only works once the worker has accepted a message from a coworker; with the chats off, it stays disabled.
 7. **The review** at the end of the round always fails: "REVIEW FAILED · Please start again.", with the resets remaining. Then "Choose your next profile.": the profiles already used are greyed out.
 8. **Disappearing.** One round per profile: 3 profiles, 3 rounds. With each failed review the whole screen (reviews included) sinks further into black. After the third, only "REVIEW FAILED" is shown, everything goes black, and **WORKER NOT FOUND** comes out of the black. The previous fading (towards white) is kept commented out in `style.css` and `game.js`.

@@ -119,7 +119,7 @@
   .grid2 .cell .art { font-size:18px; line-height:1.5; }
   .mrow { display:flex; align-items:center; gap:48px; margin-bottom:8px; }
   .thumb.cell, .mini-cell { width:108px; height:108px; }
-  .thumb .art, .mini-cell .art { font-size:7px !important; }
+  .thumb .art, .mini-cell .art { font-size:9px !important; line-height:1.3 !important; }
   .mopts { display:flex; gap:7px; }
   .mopt { min-width:86px; height:42px; padding:0 8px; margin:0; font-weight:bold; text-align:left; }
   .mopt.picked, .mopt.picked:hover { background:var(--fg); color:var(--bg); }

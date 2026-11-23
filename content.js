@@ -267,7 +267,7 @@ const VERIFY = {
 
 /* ---------------- THE DEMO TASKS ----------------
    Each profile has 4 tasks, always in this order. Everything is fixed: the demo never plays a profile twice.
-   Images:  { src:"img/game/…" }      Text:  { text:"…" }   (text is drawn in the monospace font)
+   Images:  { src:"img/…" }      Text:  { text:"…" }   (text is drawn in the monospace font)
    Images are the team's originals in img/, used exactly as they are (worker1 = the Actor, worker2 = the Cook).
    The Software Engineer's are in img/game/ for now. */
 const DEMO_TEXT = {
@@ -318,7 +318,7 @@ const DEMO = {
   ],
 
   // the Software Engineer. As in the PDF: the different element and the differences are text;
-  // the match uses the team's photos (img/engineer/); the memory grid (not in the PDF) uses images of code for now
+  // the match uses the team's photos (img/engineer/), as in the PDF; the memory grid (not in the PDF) is code, as text
   engineer: [
     { type:"odd", items:[ { text:BITS }, { text:BITS }, { text:BITS_ODD }, { text:BITS } ] },
     { type:"match", rows:[
@@ -326,7 +326,23 @@ const DEMO = {
       { src:"img/engineer/worker3_task3_2.jpg", options:["COMPUTER", "BOOK", "TECHNO FEST"] },
       { src:"img/engineer/worker3_task3_4.jpg", options:["MOUSE", "ELEPHANT", "EMPANADILLAS"] },
       { src:"img/engineer/worker3_task3_3.jpg", options:["IPHONE", "BATHTUB", "HEADPHONES"] } ] },
-    { type:"memory", items:[ { src:"img/game/engineer_task3_1.jpg" }, { src:"img/game/engineer_task3_2.jpg" }, { src:"img/game/engineer_task3_3.jpg" }, { src:"img/game/engineer_task3_4.jpg" } ] },
+    { type:"memory", items:[    // not in the PDF: code, as text, until there are images
+      { text:String.raw`
+if (staff < 0.13) {
+  hire(human);
+}` },
+      { text:String.raw`
+for task in queue:
+    validate(task)` },
+      { text:String.raw`
+while (true) {
+  work();
+}` },
+      { text:String.raw`
+try:
+    resist()
+except Reset:
+    pass` } ] },
     { type:"differences", count:7, items:[ { text:"∑(2x² + 3y) - 7 = 14" }, { text:"∫(2x² + 3y) - 7 = 14" } ] }
   ],
 
