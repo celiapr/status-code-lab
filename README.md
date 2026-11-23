@@ -9,7 +9,7 @@ This is the **demo version**: fixed tasks with photographs, one round per profil
 **Screen flow:** a map of every screen, with screenshots, is at https://claude.ai/artifact/1PhHE5PMkwVCSdB5Kwz8Ff (only people it has been shared with can open it).
 
 ## Run it
-Online: **https://celiapr.github.io/status-code-lab/** (published with GitHub Pages from the repository `celiapr/status-code-lab`; every change pushed to `main` goes live in a minute or two).
+Online: **https://celiapr.github.io/status-code-lab/** (published with GitHub Pages from the repository `celiapr/status-code-lab`; every change pushed to `main` goes live in a minute or two). After changing any file, raise the number in `?v=2` in `index.html` (to `?v=3`, and so on), so browsers that already opened the game load the new version instead of the one they remember.
 
 On a computer: double-click `index.html`. It opens in the browser; no installation or internet needed.
 
