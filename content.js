@@ -28,7 +28,9 @@ const CONFIG = {
   POPUP_GAP: 3,                // seconds between a reply and the next message
   POPUP_LINE_GAP: 2.5,         // seconds between chat lines
   POPUP_STAY: 9,               // seconds a chat line stays on screen
-  // Popups only move on while a task is on screen.
+  SURVEY_FIRST: 60,            // the company's survey (SURVEY): seconds of work before the first question
+  SURVEY_EVERY: 180,           // and then one question every this many seconds (3 minutes)
+  // Popups only move on while a task is on screen: the seconds above are seconds of tasks.
 
   // the rigged evaluation: chance that a task counts as NEGATIVE
   NEGATIVE: {
@@ -135,6 +137,8 @@ const TEXT = {
     counter: "Tasks validated since: {n}",
     button: "Apply again"
   },
+  // the bar on top of the SYSTEM popups
+  popups: { system:"HVL · SYSTEM", survey:"HVL · WELLBEING SURVEY" },
   // everyone skips at 12:00: the workers' popups pour in, then the platform's
   strike: {
     flood: [
@@ -300,16 +304,34 @@ except Reset:
 };
 
 /* =====================================================================
+   THE COMPANY'S SURVEY
+   SYSTEM popups, always in the top right corner. One question every few minutes
+   (CONFIG.SURVEY_FIRST, CONFIG.SURVEY_EVERY), in this order, starting again after the last.
+   Its answers change nothing. Left unanswered until the end of the next task, it goes away.
+   ===================================================================== */
+const SURVEY = [
+  { text:"Are you satisfied with your current role?",
+    yes:{ reply:"Thank you. Your wellbeing matters to us." },
+    no:{ reply:"Your response has been recorded." } },
+  { text:"Would you recommend this company as a workplace to other humans?",
+    yes:{ reply:"Thank you. Your wellbeing matters to us." },
+    no:{ reply:"Thank you. Your wellbeing matters to us." } },
+  { text:"Is there anything you would like to share with management?",
+    yes:{ reply:"Your response has been recorded." },
+    no:{ reply:"Your response has been recorded." } }
+];
+
+/* =====================================================================
    THE WORKERS' MESSAGES
    Popups that appear one after another during the tasks, from the second task on
-   (CONFIG.POPUPS_FROM_TASK). The workers are organising: the collective action is
-   to press the arrow (SKIP) all at the same time.
+   (CONFIG.POPUPS_FROM_TASK), somewhere different each time. The workers are organising:
+   the collective action is to press the arrow (SKIP) all at the same time.
+   (A message from SYSTEM here goes to SYSTEM's corner, like the survey.)
 
    Each message:
    - from, text: who writes and what.
    - with yes / no: a question with two buttons, YES and NO. reply = the answer that comes back.
-     · survey:true → the company's survey: the answers change nothing.
-     · otherwise, answering brings the worker in with the others, and the arrow works from then on;
+     Answering brings the worker in with the others, and the arrow works from then on;
        unless the answer has drop:true (turning them down). Turning them down, or leaving a question
        unanswered until the end of the next task: the arrow stops working, no messages for
        CONFIG.QUIET_TASKS tasks, and then the same message comes back.
@@ -319,17 +341,6 @@ except Reset:
      (the strike → the endings) or leaves it until the end of the next task (= turning them down).
    ===================================================================== */
 const MESSAGES = [
-  // the company's wellbeing survey
-  { from:"SYSTEM", survey:true, text:"Everything OK at work?",
-    yes:{ reply:"Thank you. Your wellbeing matters to us." },
-    no:{ reply:"Your response has been recorded." } },
-  { from:"SYSTEM", survey:true, text:"Do you feel supported by your team?",
-    yes:{ reply:"Thank you. Your wellbeing matters to us." },
-    no:{ reply:"Thank you. Your wellbeing matters to us." } },
-  { from:"SYSTEM", survey:true, text:"Is there anything you would like to share with management?",
-    yes:{ reply:"Your response has been recorded." },
-    no:{ reply:"Your response has been recorded." } },
-
   // a private message from another worker
   { from:"W5", text:"Hey. Everything OK at work?",
     yes:{ reply:"Glad to hear that. Just checking.", drop:true },

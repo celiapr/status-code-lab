@@ -173,6 +173,11 @@
   .pop .you { color:#5a5a5a; }
   .pop.withheld .text { text-decoration:line-through; color:#7a7a7a; }
   .pop.now { background:#fff; }
+  /* SYSTEM: the company. Square and white, with the platform's bar, always in the top right corner */
+  .pop.sys { background:#fff; border:1px solid #fff; border-radius:0; padding:0 0 5px; box-shadow:5px 5px 0 #6a6a6a; }
+  .pop.sys .sys-bar { background:#000; color:#fff; font-size:10px; letter-spacing:.12em; padding:5px 10px; margin:0 0 10px; border:1px solid #fff; }
+  .pop.sys .btns { padding:0 5px; }
+  .pop.sys .btns button { border-radius:0; }
   .pop .btns { display:flex; gap:5px; }
   .pop .btns button { flex:1; margin:0; background:#000; color:#fff; border:none; border-radius:9px; padding:8px 0; font-size:11px; }
   .pop .btns button:hover { background:#333; color:#fff; }

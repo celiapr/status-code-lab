@@ -1,19 +1,24 @@
 /* =====================================================================
    MESSAGES (popups)
-   The company's survey, a worker writing privately (W5) and the workers' chat,
-   where they organise. Texts and order: MESSAGES (content.js); timing: CONFIG.
-   - The popups start during task CONFIG.POPUPS_FROM_TASK and only move on while a task is on screen.
-   - They appear in the empty space next to the task, somewhere different each time, without covering it.
+   Two kinds, told apart by their look and their place:
+   - SYSTEM (the company): square, white, with the platform's bar on top. Always in the same
+     place, the top right corner. The wellbeing survey (SURVEY) comes now and then, on its own
+     clock (CONFIG.SURVEY_FIRST, CONFIG.SURVEY_EVERY); its answers change nothing.
+   - The workers (MESSAGES): rounded and grey, somewhere different each time, in the empty
+     space next to the task, never on top of it. W5 writes privately, then the workers' chat,
+     where they organise. Texts and order: content.js; timing: CONFIG.
+   Both only move on while a task is on screen.
    - Answering a worker brings the player in with the others: the arrow (skip) works.
    - Turning them down, or leaving a question unanswered until the end of the next task: the arrow
-     stops working, no messages for CONFIG.QUIET_TASKS tasks, then the same message comes back.
+     stops working, no workers' messages for CONFIG.QUIET_TASKS tasks, then the same message comes back.
    - The last message is the moment to press the arrow all together: the strike.
    ===================================================================== */
 
 const Chat = (() => {
-  const S = { idx:0, joined:false, quietUntil:0, active:false, activeMs:0, fresh:true, open:null, now:false, started:false };
+  const S = { idx:0, joined:false, quietUntil:0, active:false, activeMs:0, fresh:true, open:null, survey:null, now:false, started:false };
   const layer = () => document.getElementById("popups");
-  const STEP = 100;
+  const STEP = 100, GAP = 10, EDGE = 24;
+  const isSystem = from => from === "SYSTEM";
   setInterval(() => { if(S.active) S.activeMs += FAST ? STEP * 8 : STEP; }, STEP);
 
   /* waiting: for a condition, or for some seconds of task time (the clock stops between tasks) */
@@ -22,72 +27,106 @@ const Chat = (() => {
   const ready = () => S.active && !G.ended && G.tasksDone + 1 >= CONFIG.POPUPS_FROM_TASK && G.tasksDone >= S.quietUntil;
 
   /* ---------------- the popups ---------------- */
-  function popup(from, html, cls="", anywhere=false){
+  function popup(from, html, cls="", anywhere=false, bar=TEXT.popups.system){
     const p = document.createElement("div");
-    p.className = "pop " + cls;
-    p.innerHTML = `<p><span class="who">${esc(from)}</span><span class="text">${html}</span></p>`;
+    if(isSystem(from)){
+      p.className = "pop sys " + cls;
+      p.innerHTML = `<div class="sys-bar">${esc(bar)}</div><p><span class="text">${html}</span></p>`;
+    } else {
+      p.className = "pop " + cls;
+      p.innerHTML = `<p><span class="who">${esc(from)}</span><span class="text">${html}</span></p>`;
+    }
     layer().appendChild(p);
     place(p, anywhere);
     requestAnimationFrame(() => p.classList.add("in"));
     return p;
   }
   function remove(p, after=0){
-    setTimeout(() => { p.classList.remove("in"); p.classList.add("leaving"); setTimeout(() => p.remove(), 300); }, after);
+    setTimeout(() => { p.classList.remove("in"); p.classList.add("leaving"); setTimeout(() => { p.remove(); stackSystem(); }, 300); }, after);
   }
   function say(from, text, seconds=CONFIG.POPUP_STAY, anywhere=false){
     const p = popup(from, esc(text), "", anywhere);
-    Sound.play(from === "SYSTEM" ? "system" : "message");
+    Sound.play(isSystem(from) ? "system" : "message");
     remove(p, (FAST ? 0.3 : seconds) * 1000);
     return p;
   }
 
-  /* where a popup can go: to the right of the task, below the header, not on top of another popup
-     (anywhere: over the task too; for the end, when everyone skips) */
+  /* ---------------- where they go ---------------- */
   function contentRight(){
     const main = document.getElementById("main").getBoundingClientRect();
-    let right = main.left + 24;
-    document.querySelectorAll("#main .instruction, #main .cell, #main .mopt, #main .tray, #main .skip, #main .framed-note")
+    let right = main.left + EDGE;
+    document.querySelectorAll("#main .instruction, #main .cell, #main .mopt, #main .tray, #main .skip")
       .forEach(e => { right = Math.max(right, e.getBoundingClientRect().right); });
-    return { right, top:main.top };
+    return { right, top:main.top, left:main.left };
   }
-  const overlaps = (a, b, m=10) => a.left < b.right + m && b.left < a.right + m && a.top < b.bottom + m && b.top < a.bottom + m;
+  const overlaps = (a, b, m=GAP) => a.left < b.right + m && b.left < a.right + m && a.top < b.bottom + m && b.top < a.bottom + m;
+  const live = () => [...layer().children].filter(o => !o.classList.contains("leaving"));
+
+  /* SYSTEM: always the top right corner, one under the other */
+  function stackSystem(){
+    const { top } = contentRight();
+    let y = top + EDGE;
+    live().filter(p => p.classList.contains("sys")).forEach(p => {
+      p.style.left = (innerWidth - p.offsetWidth - EDGE) + "px"; p.style.top = y + "px";
+      y += p.offsetHeight + GAP;
+    });
+  }
+  /* the corner kept free for SYSTEM: the workers never go there */
+  function systemCorner(){
+    const { top } = contentRight();
+    const sys = live().filter(p => p.classList.contains("sys"));
+    const bottom = sys.length ? Math.max(...sys.map(p => p.getBoundingClientRect().bottom)) : top + EDGE + 110;
+    return { left:innerWidth - 300 - EDGE, right:innerWidth, top, bottom:Math.max(bottom, top + EDGE + 110) };
+  }
+
+  /* the workers: to the right of the task (anywhere: over the task too, for the end), somewhere
+     different each time, not on top of another popup or of the SYSTEM corner */
   function place(p, anywhere=false){
-    let { right, top } = contentRight();
-    if(anywhere) right = document.getElementById("main").getBoundingClientRect().left - 40;
+    if(p.classList.contains("sys")) return stackSystem();
+    let { right, top, left } = contentRight();
+    if(anywhere) right = left - 40;
     const w = p.offsetWidth, h = p.offsetHeight, vw = innerWidth, vh = innerHeight;
-    const x0 = right + 40, x1 = vw - w - 24, y0 = top + 24, y1 = vh - h - 24;
-    const others = [...layer().children].filter(o => o !== p && !o.classList.contains("leaving")).map(o => o.getBoundingClientRect());
+    const x0 = right + 40, x1 = vw - w - EDGE, y0 = top + EDGE, y1 = vh - h - EDGE;
+    const others = live().filter(o => o !== p).map(o => o.getBoundingClientRect());
+    others.push(systemCorner());
     let x = Math.max(x0, x1), y = y0;                                   // narrow screen: as far right as possible
-    for(let i = 0; i < 60; i++){
+    for(let i = 0; i < 80; i++){
       const cx = x1 > x0 ? x0 + rand() * (x1 - x0) : x, cy = y0 + rand() * Math.max(0, y1 - y0);
       if(!others.some(o => overlaps(o, { left:cx, right:cx + w, top:cy, bottom:cy + h }))){ x = cx; y = cy; break; }
-      if(i === 59){ y = y0 + (others.length * (h + 10)) % Math.max(1, y1 - y0); }
+      if(i === 79){ y = y1 - (others.length * (h + GAP)) % Math.max(1, y1 - y0); }
     }
     p.style.left = Math.round(x) + "px"; p.style.top = Math.round(y) + "px";
   }
-  /* a new task may be wider: move the popups that would cover it */
+  /* a new task may be wider: move the workers' popups that would cover it */
   function makeRoom(){
     const { right } = contentRight();
-    [...layer().children].forEach(p => { if(p.getBoundingClientRect().left < right + 20) place(p); });
+    live().forEach(p => { if(!p.classList.contains("sys") && p.getBoundingClientRect().left < right + 20) place(p); });
+    stackSystem();
   }
 
-  /* ---------------- a question: YES / NO ---------------- */
-  function ask(m){
+  /* ---------------- a question: YES / NO ----------------
+     slot: "open" (a worker) or "survey" (the company), so both can wait at the same time */
+  function ask(m, slot="open", bar){
     return new Promise(resolve => {
-      const p = popup(m.from, esc(m.text));
+      const sys = isSystem(m.from);
+      const p = popup(m.from, esc(m.text), "", false, bar);
       p.insertAdjacentHTML("beforeend", `<div class="btns"><button type="button">YES</button><button type="button">NO</button></div>`);
       place(p);
-      Sound.play(m.from === "SYSTEM" ? "system" : "dialog");
-      S.open = { p, shownAt:G.tasksDone, ignore:() => { remove(p); resolve(null); } };
+      Sound.play(sys ? "system" : "dialog");
+      S[slot] = { p, shownAt:G.tasksDone, ignore:() => { remove(p); resolve(null); } };
       p.querySelectorAll(".btns button").forEach((b, i) => b.onclick = () => {
-        S.open = null;
+        S[slot] = null;
         const a = (i === 0 ? m.yes : m.no) || {};
         p.querySelector(".btns").remove();
         p.insertAdjacentHTML("beforeend", `<p class="you">you: ${i === 0 ? "YES" : "NO"}</p>`);
+        place(p);
         Sound.play("click");
         if(a.reply) setTimeout(() => {
-          p.insertAdjacentHTML("beforeend", `<p><span class="who">${esc(m.from)}</span><span class="text">${esc(a.reply)}</span></p>`);
-          Sound.play(m.from === "SYSTEM" ? "system" : "message");
+          p.insertAdjacentHTML("beforeend", sys
+            ? `<p><span class="text">${esc(a.reply)}</span></p>`
+            : `<p><span class="who">${esc(m.from)}</span><span class="text">${esc(a.reply)}</span></p>`);
+          if(sys) stackSystem();
+          Sound.play(sys ? "system" : "message");
         }, FAST ? 50 : 700);
         remove(p, (FAST ? 0.3 : a.reply ? 5 : 2) * 1000);
         resolve(a);
@@ -95,13 +134,13 @@ const Chat = (() => {
     });
   }
 
-  /* turning them down (or not answering): the arrow stops working and the messages stop for a while */
+  /* turning them down (or not answering): the arrow stops working and the workers go quiet for a while */
   function drop(){
     S.joined = false; S.fresh = true;
     S.quietUntil = G.tasksDone + (S.active ? 1 : 0) + CONFIG.QUIET_TASKS;
   }
 
-  /* ---------------- the messages, one after another ---------------- */
+  /* ---------------- the workers' messages, one after another ---------------- */
   async function run(){
     while(S.idx < MESSAGES.length){
       await until(ready);
@@ -122,7 +161,6 @@ const Chat = (() => {
       }
       if(m.yes || m.no){
         const a = await ask(m);
-        if(m.survey){ S.idx++; continue; }                // the company's survey: nothing changes
         if(!a || a.drop){ drop(); continue; }             // the same message comes back later
         S.joined = true;
       } else {
@@ -133,25 +171,42 @@ const Chat = (() => {
     }
   }
 
+  /* ---------------- the company's survey, now and then ---------------- */
+  async function surveys(){
+    await taskTime(CONFIG.SURVEY_FIRST);
+    for(let i = 0; !G.ended; i++){
+      await until(() => S.active || G.ended);
+      if(G.ended) return;
+      await ask({ ...SURVEY[i % SURVEY.length], from:"SYSTEM" }, "survey", TEXT.popups.survey);
+      await taskTime(CONFIG.SURVEY_EVERY);
+    }
+  }
+
   /* ---------------- called by the game ---------------- */
   function taskStarted(){
     S.active = true; layer().hidden = false;
     makeRoom();
-    if(!S.started){ S.started = true; run(); }
+    if(!S.started){ S.started = true; run(); surveys(); }
   }
   function taskEnded(){
     S.active = false;
     // a question left unanswered until the end of the task after the one it came in
-    if(S.open && G.tasksDone >= S.open.shownAt + 2){ const o = S.open; S.open = null; o.ignore(); }
+    for(const slot of ["open", "survey"]){
+      if(S[slot] && G.tasksDone >= S[slot].shownAt + 2){ const o = S[slot]; S[slot] = null; o.ignore(); }
+    }
   }
-  /* between rounds and on full screens: the popups go away (a question waiting comes back with the next task) */
+  /* between rounds and on full screens: the popups go away (questions waiting come back with the next task) */
   function hide(){
     layer().hidden = true;
-    [...layer().children].forEach(p => { if(!S.open || p !== S.open.p) p.remove(); });
+    const keep = [S.open && S.open.p, S.survey && S.survey.p];
+    [...layer().children].forEach(p => { if(!keep.includes(p)) p.remove(); });
   }
   function clear(){ layer().innerHTML = ""; layer().hidden = true; }
   /* the arrow pressed at 12:00 */
-  function strike(){ const o = S.open; S.open = null; if(o && o.strike){ remove(o.p); o.strike(); } }
+  function strike(){
+    const o = S.open; S.open = null; if(o && o.strike){ remove(o.p); o.strike(); }
+    if(S.survey){ S.survey.p.remove(); S.survey = null; }
+  }
 
   return { taskStarted, taskEnded, hide, clear, say, strike,
            canSkip: () => S.joined && G.tasksDone >= S.quietUntil, isNow: () => S.now };
