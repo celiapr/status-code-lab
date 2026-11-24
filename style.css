@@ -166,7 +166,7 @@
   #popups[hidden] { display:none; }
   .pop { position:absolute; width:290px; background:#d6d6d6; color:#000; border:3px solid #efefef; border-radius:14px;
          padding:12px 5px 5px; font-size:12px; line-height:1.4; pointer-events:auto;
-         opacity:0; transform:translateY(6px); transition:opacity .3s, transform .3s; }
+         opacity:0; transform:translateY(6px); transition:opacity .3s, transform .3s, top .3s; }
   .pop.in { opacity:1; transform:none; }
   .pop p { margin:0 11px 8px; max-width:none; }
   .pop .who { font-weight:bold; margin-right:10px; }

@@ -1,12 +1,12 @@
 /* =====================================================================
    MESSAGES (popups)
    Two kinds, told apart by their look and their place:
-   - SYSTEM (the company): square, white, with the platform's bar on top. Always in the same
-     place, the top right corner. The wellbeing survey (SURVEY) comes now and then, on its own
-     clock (CONFIG.SURVEY_FIRST, CONFIG.SURVEY_EVERY); its answers change nothing.
-   - The workers (MESSAGES): rounded and grey, somewhere different each time, in the empty
-     space next to the task, never on top of it. W5 writes privately, then the workers' chat,
-     where they organise. Texts and order: content.js; timing: CONFIG.
+   - SYSTEM (the company): square, white, with the platform's bar on top. Always in the bottom
+     right corner, the newest at the bottom. The wellbeing survey (SURVEY) comes now and then, on
+     its own clock (CONFIG.SURVEY_FIRST, CONFIG.SURVEY_EVERY); its answers change nothing.
+   - The workers (MESSAGES): rounded and grey, in the top right corner like a computer's
+     notifications: the newest on top, the others slide down. W5 writes privately, then the
+     workers' chat, where they organise. Texts and order: content.js; timing: CONFIG.
    Both only move on while a task is on screen.
    - Answering a worker brings the player in with the others: the arrow (skip) works.
    - Turning them down, or leaving a question unanswered until the end of the next task: the arrow
@@ -52,7 +52,7 @@ const Chat = (() => {
     return p;
   }
   function remove(p, after=0){
-    setTimeout(() => { p.classList.remove("in"); p.classList.add("leaving"); setTimeout(() => { p.remove(); stackSystem(); }, 300); }, after);
+    setTimeout(() => { p.classList.remove("in"); p.classList.add("leaving"); setTimeout(() => { p.remove(); restack(); }, 300); }, after);
   }
   function say(from, text, seconds=CONFIG.POPUP_STAY, anywhere=false){
     const p = popup(from, esc(text), "", anywhere);
@@ -72,47 +72,45 @@ const Chat = (() => {
   const overlaps = (a, b, m=GAP) => a.left < b.right + m && b.left < a.right + m && a.top < b.bottom + m && b.top < a.bottom + m;
   const live = () => [...layer().children].filter(o => !o.classList.contains("leaving"));
 
-  /* SYSTEM: always the top right corner, one under the other */
-  function stackSystem(){
+  /* the workers: top right, like a computer's notifications. The newest on top, the others
+     slide down. (The strike's flood goes "anywhere", class "free": scattered over the task.) */
+  function stackWorkers(){
     const { top } = contentRight();
     let y = top + EDGE;
-    live().filter(p => p.classList.contains("sys")).forEach(p => {
+    live().filter(p => !p.classList.contains("sys") && !p.classList.contains("free")).reverse().forEach(p => {
       p.style.left = (innerWidth - p.offsetWidth - EDGE) + "px"; p.style.top = y + "px";
       y += p.offsetHeight + GAP;
     });
   }
-  /* the corner kept free for SYSTEM: the workers never go there */
-  function systemCorner(){
-    const { top } = contentRight();
-    const sys = live().filter(p => p.classList.contains("sys"));
-    const bottom = sys.length ? Math.max(...sys.map(p => p.getBoundingClientRect().bottom)) : top + EDGE + 110;
-    return { left:innerWidth - 300 - EDGE, right:innerWidth, top, bottom:Math.max(bottom, top + EDGE + 110) };
+  /* SYSTEM: always the bottom right corner, the newest at the bottom, the others go up */
+  function stackSystem(){
+    let y = innerHeight - EDGE;
+    live().filter(p => p.classList.contains("sys")).reverse().forEach(p => {
+      y -= p.offsetHeight;
+      p.style.left = (innerWidth - p.offsetWidth - EDGE) + "px"; p.style.top = y + "px";
+      y -= GAP;
+    });
   }
+  const restack = () => { stackWorkers(); stackSystem(); };
 
-  /* the workers: to the right of the task (anywhere: over the task too, for the end), somewhere
-     different each time, not on top of another popup or of the SYSTEM corner */
   function place(p, anywhere=false){
-    if(p.classList.contains("sys")) return stackSystem();
-    let { right, top, left } = contentRight();
-    if(anywhere) right = left - 40;
-    const w = p.offsetWidth, h = p.offsetHeight, vw = innerWidth, vh = innerHeight;
-    const x0 = right + 40, x1 = vw - w - EDGE, y0 = top + EDGE, y1 = vh - h - EDGE;
+    if(!anywhere) return restack();
+    p.classList.add("free");                                            // the flood: anywhere, over the task too
+    const { top } = contentRight();
+    const w = p.offsetWidth, h = p.offsetHeight;
+    const x0 = EDGE, x1 = innerWidth - w - EDGE, y0 = top + EDGE, y1 = innerHeight - h - EDGE;
     const others = live().filter(o => o !== p).map(o => o.getBoundingClientRect());
-    others.push(systemCorner());
-    let x = Math.max(x0, x1), y = y0;                                   // narrow screen: as far right as possible
+    let x = x1, y = y0;
     for(let i = 0; i < 80; i++){
-      const cx = x1 > x0 ? x0 + rand() * (x1 - x0) : x, cy = y0 + rand() * Math.max(0, y1 - y0);
-      if(!others.some(o => overlaps(o, { left:cx, right:cx + w, top:cy, bottom:cy + h }))){ x = cx; y = cy; break; }
-      if(i === 79){ y = y1 - (others.length * (h + GAP)) % Math.max(1, y1 - y0); }
+      const cx = x0 + rand() * Math.max(0, x1 - x0), cy = y0 + rand() * Math.max(0, y1 - y0);
+      x = cx; y = cy;
+      if(!others.some(o => overlaps(o, { left:cx, right:cx + w, top:cy, bottom:cy + h }))) break;
     }
     p.style.left = Math.round(x) + "px"; p.style.top = Math.round(y) + "px";
   }
-  /* a new task may be wider: move the workers' popups that would cover it */
-  function makeRoom(){
-    const { right } = contentRight();
-    live().forEach(p => { if(!p.classList.contains("sys") && p.getBoundingClientRect().left < right + 20) place(p); });
-    stackSystem();
-  }
+  /* on each new task (and when the window changes size) */
+  const makeRoom = restack;
+  addEventListener("resize", restack);
 
   /* ---------------- a question: YES / NO ----------------
      slot: "open" (a worker) or "survey" (the company), so both can wait at the same time */
@@ -135,7 +133,7 @@ const Chat = (() => {
           p.insertAdjacentHTML("beforeend", sys
             ? `<p><span class="text">${esc(a.reply)}</span></p>`
             : `<p><span class="who">${esc(label(m.from))}</span><span class="text">${esc(a.reply)}</span></p>`);
-          if(sys) stackSystem();
+          restack();
           Sound.play(sys ? "system" : "message");
         }, FAST ? 50 : 700);
         remove(p, (FAST ? 0.3 : a.reply ? 5 : 2) * 1000);

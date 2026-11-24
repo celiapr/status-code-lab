@@ -324,7 +324,7 @@ const SURVEY = [
 /* =====================================================================
    THE WORKERS' MESSAGES
    Popups that appear one after another during the tasks, from the second task on
-   (CONFIG.POPUPS_FROM_TASK), somewhere different each time. The workers are organising:
+   (CONFIG.POPUPS_FROM_TASK), in the top right corner, the newest on top. The workers are organising:
    the collective action is to press the arrow (SKIP) all at the same time.
    (A message from SYSTEM here goes to SYSTEM's corner, like the survey.)
 
