@@ -143,8 +143,8 @@ const TEXT = {
   strike: {
     flood: [
       ["W4","skipped."], ["W1","skipped."], ["W2","skipped."], ["W3","skipped."], ["W5","skipped."],
-      ["worker_0311","skipped."], ["worker_0527","skipped."], ["worker_0613","skipped."], ["worker_0702","skipped."],
-      ["worker_0849","skipped."], ["worker_0954","skipped."], ["worker_1027","skipped."], ["worker_1146","skipped."]
+      ["W0311","skipped."], ["W0527","skipped."], ["W0613","skipped."], ["W0702","skipped."],
+      ["W0849","skipped."], ["W0954","skipped."], ["W1027","skipped."], ["W1146","skipped."]
     ],
     systemLines: [
       "Inactivity detected.",
@@ -329,7 +329,7 @@ const SURVEY = [
    (A message from SYSTEM here goes to SYSTEM's corner, like the survey.)
 
    Each message:
-   - from, text: who writes and what.
+   - from, text: who writes and what. W1…W5 are shown as a random number, new each game (W2939…).
    - with yes / no: a question with two buttons, YES and NO. reply = the answer that comes back.
      Answering brings the worker in with the others, and the arrow works from then on;
        unless the answer has drop:true (turning them down). Turning them down, or leaving a question

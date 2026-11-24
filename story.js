@@ -19,6 +19,16 @@ const Chat = (() => {
   const layer = () => document.getElementById("popups");
   const STEP = 100, GAP = 10, EDGE = 24;
   const isSystem = from => from === "SYSTEM";
+  /* W1…W5 in content.js become a random number each game (W2939…), the same one all game long */
+  const names = {};
+  function label(from){
+    if(!/^W\d$/.test(from)) return from;
+    while(!names[from]){
+      const n = "W" + randInt(1000, 9999);
+      if(!Object.values(names).includes(n) && !G.id.endsWith(n.slice(1))) names[from] = n;
+    }
+    return names[from];
+  }
   setInterval(() => { if(S.active) S.activeMs += FAST ? STEP * 8 : STEP; }, STEP);
 
   /* waiting: for a condition, or for some seconds of task time (the clock stops between tasks) */
@@ -34,7 +44,7 @@ const Chat = (() => {
       p.innerHTML = `<div class="sys-bar">${esc(bar)}</div><p><span class="text">${html}</span></p>`;
     } else {
       p.className = "pop " + cls;
-      p.innerHTML = `<p><span class="who">${esc(from)}</span><span class="text">${html}</span></p>`;
+      p.innerHTML = `<p><span class="who">${esc(label(from))}</span><span class="text">${html}</span></p>`;
     }
     layer().appendChild(p);
     place(p, anywhere);
@@ -124,7 +134,7 @@ const Chat = (() => {
         if(a.reply) setTimeout(() => {
           p.insertAdjacentHTML("beforeend", sys
             ? `<p><span class="text">${esc(a.reply)}</span></p>`
-            : `<p><span class="who">${esc(m.from)}</span><span class="text">${esc(a.reply)}</span></p>`);
+            : `<p><span class="who">${esc(label(m.from))}</span><span class="text">${esc(a.reply)}</span></p>`);
           if(sys) stackSystem();
           Sound.play(sys ? "system" : "message");
         }, FAST ? 50 : 700);

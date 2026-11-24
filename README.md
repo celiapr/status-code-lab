@@ -9,7 +9,7 @@ This is the **demo version**: fixed tasks with photographs, one round per profil
 **Screen flow:** a map of every screen, with screenshots, is at https://claude.ai/artifact/1PhHE5PMkwVCSdB5Kwz8Ff (only people it has been shared with can open it).
 
 ## Run it
-Online: **https://celiapr.github.io/status-code-lab/** (published with GitHub Pages from the repository `celiapr/status-code-lab`; every change pushed to `main` goes live in a minute or two). After changing any file, raise the number in `?v=6` in `index.html` (to `?v=7`, and so on), so browsers that already opened the game load the new version instead of the one they remember.
+Online: **https://celiapr.github.io/status-code-lab/** (published with GitHub Pages from the repository `celiapr/status-code-lab`; every change pushed to `main` goes live in a minute or two). After changing any file, raise the number in `?v=7` in `index.html` (to `?v=8`, and so on), so browsers that already opened the game load the new version instead of the one they remember.
 
 On a computer: double-click `index.html`. It opens in the browser; no installation or internet needed.
 
@@ -48,7 +48,7 @@ Testing (add to the end of the address):
    The Software Engineer, as in the PDF: the different element (binary blocks) and the differences (two formulas) are text; the match uses the team's photos in `img/engineer/`, as in the PDF; the memory grid, which isn't in the PDF, shows four short pieces of code as text until there are images.
 6. **Popups.** Two kinds, which look different and appear in different places. Both only move on while a task is on screen (not during reviews or the profile screen).
    - *SYSTEM* (the company): square and white, with the bar "HVL · WELLBEING SURVEY" or "HVL · SYSTEM" on top, always in the top right corner, one under the other. The survey comes after the first minute of work and then every 3 minutes, one question at a time, in turn: "Are you satisfied with your current role?", "Would you recommend this company as a workplace to other humans?", "Is there anything you would like to share with management?". YES / NO; its answers change nothing. Left unanswered until the end of the next task, it goes away.
-   - *The workers*: rounded and grey, in the empty space next to the task, somewhere different each time, never on top of it or of SYSTEM's corner. From the second task on, one after another:
+   - *The workers*: their names are a random number, new each game (W2939, W0417…); in `content.js` they are written W1…W5. Rounded and grey, in the empty space next to the task, somewhere different each time, never on top of it or of SYSTEM's corner. From the second task on, one after another:
 
    1. *W5 writes privately*: "Hey. Everything OK at work?", "Do you feel supported by the people working alongside you?", "Have you ever thought about talking to the others about what's going on?", and if YES, "There's a few of us already talking. Want me to add you?".
    2. *The workers' chat*: the player comes in in the middle of the conversation. Lines from W1–W4 that stay a few seconds and go. They are organising: the collective action is to press the arrow (SKIP) all at the same time, at 12:00. "a work stoppage at 12:00. all of us. will you?" asks for YES or NO. "we need to be a union" gets struck through, and SYSTEM, in its corner: "1 message withheld: contains 'union'".
@@ -60,7 +60,7 @@ Testing (add to the end of the address):
 8. **The arrow** (bottom left of each task) skips the task. It is always there, but it only works while the player is with the others. Skipping alone doesn't save anyone: the review still fails. Pressed at 12:00, it is the strike.
 9. **The review** at the end of the round always fails: "REVIEW FAILED · Please start again.", with the resets remaining. Then "Choose your next profile.": the profiles already used are greyed out.
 10. **Ending A: disappearing.** One round per profile: 3 profiles, 3 rounds. With each failed review the whole screen (reviews included) sinks further into black; the popups stay sharp. After the third, only "REVIEW FAILED" is shown, everything goes black, and **WORKER NOT FOUND** comes out of the black. The previous fading (towards white) is kept commented out in `style.css` and `game.js`.
-11. **Ending B: the strike.** Pressing the arrow at 12:00: the screen lights up again, popups pour in over the task ("W4 skipped.", "worker_0311 skipped."…), then SYSTEM, stacked in its corner: "Inactivity detected.", "Active human validators: 0", "Minimum Human Quota: 13% → 0%", "COMPLIANCE STATUS: FAILED", and the header turns NON-COMPLIANT. Then TERMINATION OF EMPLOYMENT → SYSTEM FAILURE → YOU WON!
+11. **Ending B: the strike.** Pressing the arrow at 12:00: the screen lights up again, popups pour in over the task ("W2939 skipped.", "W0311 skipped."…), then SYSTEM, stacked in its corner: "Inactivity detected.", "Active human validators: 0", "Minimum Human Quota: 13% → 0%", "COMPLIANCE STATUS: FAILED", and the header turns NON-COMPLIANT. Then TERMINATION OF EMPLOYMENT → SYSTEM FAILURE → YOU WON!
 
 ## Editing
 Everything is in `content.js`, with comments:
