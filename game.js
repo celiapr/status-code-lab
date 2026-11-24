@@ -192,9 +192,12 @@ function nextTask(){
 
 function startTimer(){
   clearInterval(G.timer);
-  const deadline = performance.now() + CONFIG.TASK_SECONDS * 1000;
+  let deadline = performance.now() + CONFIG.TASK_SECONDS * 1000, last = performance.now();
   const tick = () => {
-    const left = (deadline - performance.now()) / 1000;
+    const now = performance.now();
+    if(Chat.paused()) deadline += now - last;        // the workers' chat box is open: the task waits
+    last = now;
+    const left = (deadline - now) / 1000;
     setTime(clock(left), left / CONFIG.TASK_SECONDS);
     const s = $("#skip");
     if(s){ s.disabled = !(Chat.canSkip() || Chat.isNow()) || G.busy; s.classList.toggle("now", Chat.isNow()); }

@@ -5,9 +5,10 @@
      right corner, the newest at the bottom. The wellbeing survey (SURVEY) comes now and then, on
      its own clock (CONFIG.SURVEY_FIRST, CONFIG.SURVEY_EVERY); its answers change nothing.
    - The workers (MESSAGES): rounded and grey, in the top right corner like a computer's
-     notifications: the newest on top, the others slide down. W5 writes privately, then the
-     workers' chat, where they organise. Texts and order: content.js; timing: CONFIG.
-   Both only move on while a task is on screen.
+     notifications: the newest on top, the others slide down. W5 writes privately; then the
+     workers' chat opens, a box in the middle of the screen, where they organise.
+     Texts and order: content.js; timing: CONFIG.
+   They only move on while a task is on screen. While the chat box is open the task waits.
    - Answering a worker brings the player in with the others: the arrow (skip) works.
    - Turning them down, or leaving a question unanswered until the end of the next task: the arrow
      stops working, no workers' messages for CONFIG.QUIET_TASKS tasks, then the same message comes back.
@@ -15,17 +16,18 @@
    ===================================================================== */
 
 const Chat = (() => {
-  const S = { idx:0, joined:false, quietUntil:0, active:false, activeMs:0, fresh:true, open:null, survey:null, now:false, started:false };
+  const S = { idx:0, joined:false, quietUntil:0, active:false, activeMs:0, fresh:true, open:null, survey:null, now:false, started:false, box:false };
   const layer = () => document.getElementById("popups");
   const STEP = 100, GAP = 10, EDGE = 24;
   const isSystem = from => from === "SYSTEM";
-  /* W1…W5 in content.js become a random number each game (W2939…), the same one all game long */
+  /* W1…W7 in content.js become a random two-digit number each game (W35…), the same one all game long */
   const names = {};
+  const taken = TEXT.strike.flood.map(f => f[0]);
   function label(from){
     if(!/^W\d$/.test(from)) return from;
     while(!names[from]){
-      const n = "W" + randInt(1000, 9999);
-      if(!Object.values(names).includes(n) && !G.id.endsWith(n.slice(1))) names[from] = n;
+      const n = "W" + randInt(10, 99);
+      if(!Object.values(names).includes(n) && !taken.includes(n)) names[from] = n;
     }
     return names[from];
   }
@@ -70,7 +72,7 @@ const Chat = (() => {
     return { right, top:main.top, left:main.left };
   }
   const overlaps = (a, b, m=GAP) => a.left < b.right + m && b.left < a.right + m && a.top < b.bottom + m && b.top < a.bottom + m;
-  const live = () => [...layer().children].filter(o => !o.classList.contains("leaving"));
+  const live = () => [...layer().children].filter(o => o.classList.contains("pop") && !o.classList.contains("leaving"));   // popups only (not the chat box)
 
   /* the workers: top right, like a computer's notifications. The newest on top, the others
      slide down. (The strike's flood goes "anywhere", class "free": scattered over the task.) */
@@ -94,7 +96,7 @@ const Chat = (() => {
   const restack = () => { stackWorkers(); stackSystem(); };
 
   function place(p, anywhere=false){
-    if(!anywhere) return restack();
+    if(!anywhere || p.classList.contains("sys")) return restack();         // SYSTEM: always its corner
     p.classList.add("free");                                            // the flood: anywhere, over the task too
     const { top } = contentRight();
     const w = p.offsetWidth, h = p.offsetHeight;
@@ -152,12 +154,16 @@ const Chat = (() => {
   async function run(){
     while(S.idx < MESSAGES.length){
       await until(ready);
-      const m = MESSAGES[S.idx], asks = m.yes || m.no || m.now;
+      const m = MESSAGES[S.idx], asks = m.yes || m.no || m.now || m.chat;
       await taskTime(S.fresh ? CONFIG.POPUP_FIRST : asks ? CONFIG.POPUP_GAP : CONFIG.POPUP_LINE_GAP);
       if(G.ended) return;
       if(!ready()) continue;
       S.fresh = false;
 
+      if(m.chat){                                         // the workers' chat: the box
+        if(!(await chatBox(m))){ drop(); continue; }      // not written: the whole chat comes back later
+        S.joined = true; S.idx++; continue;
+      }
       if(m.now){                                          // 12:00: press the arrow, all together
         const p = popup(m.from, esc(m.text), "now");
         Sound.play("dialog");
@@ -177,6 +183,71 @@ const Chat = (() => {
       }
       S.idx++;
     }
+  }
+
+  /* ---------------- the workers' chat: a box in the middle of the screen ----------------
+     The lines come in and the box scrolls up; then the worker writes (any key types m.you).
+     The task waits meanwhile. Resolves true once written, false if left for CONFIG.BOX_WAIT seconds. */
+  const VIEW = 12 * 33.6;                                // 12 lines visible
+  const secs = s => new Promise(r => setTimeout(r, (FAST ? s * 0.1 : s) * 1000));
+  const readTime = l => CONFIG.BOX_READ + CONFIG.BOX_PER_CHAR * (label(l.from).length + l.text.length + 2);
+  function fitBox(shade){
+    const k = Math.min(1, (innerWidth - 32) / 1000, (innerHeight - 32) / 652);
+    shade.querySelector(".chatbox").style.transform = `scale(${k})`;
+  }
+  function chatBox(m){
+    return new Promise(async resolve => {
+      S.box = true; S.active = false;
+      const shade = document.createElement("div");
+      shade.className = "chatbox-shade";
+      shade.innerHTML = `<div class="chatbox"><div class="cb-shadow"></div><div class="cb-frame">
+        <div class="cb-win"><div class="cb-lines"></div></div>
+        <div class="cb-input"><span>${esc(TEXT.chatbox.you)}: <span class="cb-typed"></span><span class="cb-caret"></span></span></div>
+      </div></div>`;
+      layer().hidden = false; layer().appendChild(shade);
+      const fit = () => fitBox(shade); fit(); addEventListener("resize", fit);
+      const lines = shade.querySelector(".cb-lines"), typed = shade.querySelector(".cb-typed");
+      const add = (from, text, you) => {
+        const d = document.createElement("div");
+        if(isSystem(from)) d.className = "sys";
+        d.textContent = (you ? TEXT.chatbox.you : label(from)) + ": " + text;
+        lines.appendChild(d);
+        lines.style.transform = `translateY(${-Math.max(0, lines.offsetHeight - VIEW)}px)`;
+        Sound.play(you ? "click" : isSystem(from) ? "system" : "message");
+      };
+      let key = () => {};
+      const close = ok => {
+        removeEventListener("resize", fit); document.removeEventListener("keydown", key);
+        shade.remove(); S.box = false; S.active = !G.ended && !G.busy; resolve(ok);
+      };
+
+      Sound.play("dialog");
+      for(let i = 0; i < m.chat.length; i++){
+        const l = m.chat[i];
+        await secs(i ? Math.max(0.3, (l.pace ?? 1) * readTime(m.chat[i - 1])) : CONFIG.BOX_FIRST);
+        if(G.ended) return close(false);
+        add(l.from, l.text);
+      }
+      await secs(readTime(m.chat[m.chat.length - 1]));
+
+      // the worker's turn: any key types the next letter; once it is all there, one more key sends it
+      const text = [...m.you];
+      let n = 0, sent = false, idle;
+      const wait = () => { clearTimeout(idle); idle = setTimeout(() => { if(!sent) close(false); }, (FAST ? 0.1 : 1) * CONFIG.BOX_WAIT * 1000); };
+      key = e => {
+        if(sent || e.metaKey || e.ctrlKey || e.altKey || ["Shift","Meta","Control","Alt","CapsLock","Tab"].includes(e.key)) return;
+        e.preventDefault();
+        shade.classList.add("keying"); clearTimeout(shade.k); shade.k = setTimeout(() => shade.classList.remove("keying"), 500);
+        if(n < text.length){ n++; typed.textContent = text.slice(0, n).join(""); Sound.play("click"); wait(); return; }
+        sent = true; clearTimeout(idle);
+        typed.textContent = ""; add("YOU", m.you, true);
+        setTimeout(() => close(true), (FAST ? 0.1 : 1) * CONFIG.BOX_STAY * 1000);
+      };
+      shade.classList.add("typing");
+      document.addEventListener("keydown", key);
+      shade.onpointerdown = e => key({ key:"tap", preventDefault(){} });   // touch screens: each tap types
+      wait();
+    });
   }
 
   /* ---------------- the company's survey, now and then ---------------- */
@@ -217,5 +288,6 @@ const Chat = (() => {
   }
 
   return { taskStarted, taskEnded, hide, clear, say, strike,
-           canSkip: () => S.joined && G.tasksDone >= S.quietUntil, isNow: () => S.now };
+           canSkip: () => S.joined && G.tasksDone >= S.quietUntil, isNow: () => S.now,
+           paused: () => !!S.box };
 })();

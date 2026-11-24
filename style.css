@@ -179,6 +179,28 @@
   .pop.sys .btns { padding:0 5px; }
   .pop.sys .btns button { border-radius:0; }
   .pop .btns { display:flex; gap:5px; }
+
+  /* the workers' chat box: in the middle of the screen, 1000×652 (smaller screens: scaled down) */
+  .chatbox-shade { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:auto; }
+  .chatbox { position:relative; flex:none; width:1000px; height:652px; transform-origin:center;
+             --cb-ink:#d6d6d6; --cb-grey:#d4d4d6; }
+  .cb-shadow { position:absolute; left:18px; top:16px; width:982px; height:636px; background:var(--cb-grey); }
+  .cb-frame { position:absolute; left:0; top:0; width:974px; height:628px; background:#000; border:4px solid var(--cb-grey); }
+  .cb-win, .cb-input { font-family:inherit; font-weight:700; font-size:28px; line-height:33.6px; color:var(--cb-ink);
+                       font-variant-ligatures:none; }
+  .cb-win { position:absolute; left:39px; top:53px; width:916px; height:410px; overflow:hidden;
+            -webkit-mask-image:linear-gradient(to bottom, transparent 0, transparent 6px, #000 11px);
+            mask-image:linear-gradient(to bottom, transparent 0, transparent 6px, #000 11px); }
+  .cb-lines { position:absolute; left:0; top:1.5px; width:916px; white-space:pre-wrap; transition:transform .45s cubic-bezier(.33,1,.68,1); }
+  .cb-lines div { max-width:none; animation:cb-in .18s ease-out; }
+  .cb-lines div.sys { font-style:italic; font-weight:400; color:#9a9a9a; }
+  .cb-input { position:absolute; left:38px; top:485px; width:914px; height:78px; border:1px solid var(--cb-ink); }
+  .cb-input > span { position:absolute; left:72px; top:22px; white-space:pre; }
+  .cb-caret { display:inline-block; width:3px; height:30px; background:var(--cb-ink); vertical-align:-6px; margin-left:2px;
+              animation:cb-blink 1.06s steps(1) infinite; }
+  .chatbox-shade.keying .cb-caret { animation:none; }
+  @keyframes cb-in { from { opacity:0; } }
+  @keyframes cb-blink { 50% { opacity:0; } }
   .pop .btns button { flex:1; margin:0; background:#000; color:#fff; border:none; border-radius:9px; padding:8px 0; font-size:11px; }
   .pop .btns button:hover { background:#333; color:#fff; }
 

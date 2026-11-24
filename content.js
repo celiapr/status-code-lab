@@ -28,6 +28,12 @@ const CONFIG = {
   POPUP_GAP: 3,                // seconds between a reply and the next message
   POPUP_LINE_GAP: 2.5,         // seconds between chat lines
   POPUP_STAY: 9,               // seconds a chat line stays on screen
+  // the workers' chat box (in the middle of the screen). While it is open the task waits (its clock stops)
+  BOX_FIRST: 0.8,              // seconds before the first line
+  BOX_READ: 0.9,               // time to read a line: this many seconds…
+  BOX_PER_CHAR: 0.042,         // …plus this many per character. A line's pace (in MESSAGES) shortens it
+  BOX_WAIT: 20,                // seconds the box waits for the worker to write; then it closes (= turning them down)
+  BOX_STAY: 2.5,               // seconds the box stays open once the worker has written
   SURVEY_FIRST: 60,            // the company's survey (SURVEY): seconds of work before the first question
   SURVEY_EVERY: 180,           // and then one question every this many seconds (3 minutes)
   // Popups only move on while a task is on screen: the seconds above are seconds of tasks.
@@ -139,12 +145,14 @@ const TEXT = {
   },
   // the bar on top of the SYSTEM popups
   popups: { system:"HVL · SYSTEM", survey:"HVL · WELLBEING SURVEY" },
+  chatbox: { you:"YOU" },      // the worker's name in the chat box
   // everyone skips at 12:00: the workers' popups pour in, then the platform's
   strike: {
     flood: [
       ["W4","skipped."], ["W1","skipped."], ["W2","skipped."], ["W3","skipped."], ["W5","skipped."],
-      ["W0311","skipped."], ["W0527","skipped."], ["W0613","skipped."], ["W0702","skipped."],
-      ["W0849","skipped."], ["W0954","skipped."], ["W1027","skipped."], ["W1146","skipped."]
+      ["W6","skipped."], ["W7","skipped."],
+      ["W12","skipped."], ["W19","skipped."], ["W38","skipped."], ["W44","skipped."],
+      ["W57","skipped."], ["W63","skipped."], ["W81","skipped."], ["W96","skipped."]
     ],
     systemLines: [
       "Inactivity detected.",
@@ -323,22 +331,29 @@ const SURVEY = [
 
 /* =====================================================================
    THE WORKERS' MESSAGES
-   Popups that appear one after another during the tasks, from the second task on
-   (CONFIG.POPUPS_FROM_TASK), in the top right corner, the newest on top. The workers are organising:
+   First popups, one after another during the tasks, from the second task on
+   (CONFIG.POPUPS_FROM_TASK), in the top right corner, the newest on top: W5 writes privately.
+   Then the workers' chat opens: a box in the middle of the screen. The workers are organising:
    the collective action is to press the arrow (SKIP) all at the same time.
-   (A message from SYSTEM here goes to SYSTEM's corner, like the survey.)
 
-   Each message:
-   - from, text: who writes and what. W1…W5 are shown as a random number, new each game (W2939…).
+   Each popup:
+   - from, text: who writes and what. W1…W7 are shown as a random two-digit number, new each game (W35…).
    - with yes / no: a question with two buttons, YES and NO. reply = the answer that comes back.
      Answering brings the worker in with the others, and the arrow works from then on;
        unless the answer has drop:true (turning them down). Turning them down, or leaving a question
        unanswered until the end of the next task: the arrow stops working, no messages for
        CONFIG.QUIET_TASKS tasks, and then the same message comes back.
-   - without yes / no: a chat line. It stays a few seconds (CONFIG.POPUP_STAY) and goes.
-     · withheld:true → the platform strikes it through a moment later.
    - now:true → the moment of the collective action. It stays until the worker presses the arrow
      (the strike → the endings) or leaves it until the end of the next task (= turning them down).
+
+   The chat box (chat: the lines, you: what the worker writes):
+   - the lines come in one after another and the box scrolls up. pace: how soon a line comes after
+     the one before; 1 = the full time to read it (CONFIG.BOX_READ, BOX_PER_CHAR), less = right after,
+     or almost at the same time. A line from SYSTEM is in italics, in grey.
+   - at the end the worker writes: whatever key they press, the text of "you" is typed, letter by
+     letter; one more key (or Enter) sends it. Writing it brings the worker in with the others.
+     Not writing for CONFIG.BOX_WAIT seconds closes the box (= turning them down); later the whole
+     chat comes back.
    ===================================================================== */
 const MESSAGES = [
   // a private message from another worker
@@ -355,31 +370,32 @@ const MESSAGES = [
     yes:{},
     no:{ reply:"I understand. But maybe we should. Things won't change otherwise.", drop:true } },
 
-  // the workers' chat: the worker comes in in the middle of the conversation
-  { from:"W2", text:"just tagging cats all day" },
-  { from:"W4", text:"35 labels left till the break" },
-  { from:"W1", text:"queue refills the second you finish" },
-  { from:"W3", text:"click work till my wrist hurts" },
-  { from:"W2", text:"i'm 12 tasks off quota" },
-  { from:"W4", text:"a wellness webinar instead of a raise" },
-  { from:"W1", text:"great pay, no benefits 🙃" },
-  { from:"W3", text:"rest period ends in 10 seconds" },
-  { from:"W1", text:"ok so click the SKIP button alone, that's a reset" },
-  { from:"W2", text:"only one of us gets a reset each time. always one" },
-  { from:"W3", text:"if we all click SKIP at the same time, the Model can't reset us all" },
-  { from:"W4", text:"everyone click the SKIP button at once. that's the collective action" },
-  { from:"W1", text:"a work stoppage at 12:00. all of us. will you?",
-    yes:{}, no:{ drop:true } },
-  { from:"W2", text:"we're 4 now. add yours" },
-  { from:"W3", text:"tell them in the back channel. whisper network" },
-  { from:"W4", text:"workers together. we need to be a union", withheld:true },
-  { from:"SYSTEM", text:"1 message withheld: contains 'union'" },
-  { from:"W2", text:"they stopped our message 😭" },
-  { from:"W1", text:"that's why. they need a scapegoat. not us. all of us together" },
-  { from:"W3", text:"SKIP button at 12:00. not before" },
-  { from:"W4", text:"i'm in" },
-  { from:"W1", text:"i'm in" },
-  { from:"W2", text:"i'm in" },
+  // the workers' chat, in the box: the worker comes in in the middle of the conversation
+  { chat:[
+    { from:"W2", text:"just tagging cats all day" },
+    { from:"W4", text:"35 labels left till the break", pace:1 },
+    { from:"W1", text:"queue refills the second you finish", pace:.2 },
+    { from:"W6", text:"click work till my wrist hurts", pace:.6 },
+    { from:"W2", text:"i’m 12 tasks off quota", pace:1 },
+    { from:"W4", text:"a wellness webinar instead of a raise", pace:.25 },
+    { from:"W1", text:"great pay, no benefits 🙃", pace:.15 },
+    { from:"W6", text:"rest period ends in 10 seconds", pace:1 },
+    { from:"W1", text:"ok so click the SKIP button alone, that’s a reset", pace:1 },
+    { from:"W2", text:"only one of us gets a reset each time. always one", pace:.3 },
+    { from:"W3", text:"if we all click SKIP at the same time, the Model can’t reset us all", pace:1 },
+    { from:"W4", text:"everyone click the SKIP button at once. that’s the collective action", pace:.5 },
+    { from:"W1", text:"a work stoppage at 12:00. all of us. will you?", pace:1 },
+    { from:"W2", text:"we’re 4 now. add yours", pace:.25 },
+    { from:"W3", text:"tell them in the back channel. whisper network", pace:.2 },
+    { from:"W4", text:"workers together. we need to be a union", pace:1 },
+    { from:"SYSTEM", text:"1 message withheld: contains ‘union’", pace:.12 },
+    { from:"W2", text:"they stopped our message 😭", pace:1 },
+    { from:"W1", text:"that’s why. they need a scapegoat. not us. all of us together", pace:.55 },
+    { from:"W3", text:"SKIP button at 12:00. not before", pace:1 },
+    { from:"W4", text:"i’m in", pace:1 },
+    { from:"W1", text:"i’m in", pace:.2 },
+    { from:"W7", text:"i’m in", pace:.15 } ],
+    you:"i’m in" },
 
   // 12:00
   { from:"W1", text:"12:00. SKIP. now.", now:true }
