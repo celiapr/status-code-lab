@@ -11,17 +11,16 @@
   html, body { margin:0; height:100%; }
   body { background:var(--bg); color:var(--fg);
          font-family: "HVL Mono", ui-monospace, Menlo, Consolas, "Courier New", monospace; font-size:14px; }
-  #app { display:grid; grid-template-columns:240px 1fr 300px; grid-template-rows:auto auto 1fr; height:100vh; }
-  header { grid-column:1 / 4; display:flex; justify-content:space-between; align-items:center; gap:16px;
+  #app { display:grid; grid-template-columns:240px 1fr; grid-template-rows:auto auto 1fr; height:100vh; }
+  header { grid-column:1 / 3; display:flex; justify-content:space-between; align-items:center; gap:16px;
            padding:10px 16px; border-bottom:1px solid var(--fg); }
   #compliance { font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
   #compliance.fail { background:var(--fg); color:var(--bg); padding:2px 6px; animation:blink .6s steps(2) infinite; }
-  #timer { grid-column:1 / 4; height:6px; background:var(--soft); }
+  #timer { grid-column:1 / 3; height:6px; background:var(--soft); }
   #timer > div { height:100%; width:0; background:var(--fg); }
   main { padding:20px 24px; overflow:auto; min-height:0; position:relative; }
   aside { padding:12px; font-size:12px; overflow:auto; min-height:0; }
   #left { border-right:1px solid var(--fg); }
-  #right { border-left:1px solid var(--fg); }
   h1.big, .big { font-size:28px; font-weight:bold; margin:8px 0 16px; }
   p { max-width:70ch; line-height:1.45; }
   .label { font-size:11px; letter-spacing:.08em; text-transform:uppercase; margin:14px 0 6px; }
@@ -36,14 +35,9 @@
   button.link:hover { background:none; color:var(--fg); }
   button.inverse { background:var(--fg); color:var(--bg); }
 
-  /* no chats (CONFIG.CHATS = false): no right column */
-  body.nochat #app { grid-template-columns:240px 1fr; }
-  body.nochat header, body.nochat #timer { grid-column:1 / 3; }
-  body.nochat #right { display:none; }
-
   /* before work: only the centre */
   body.pre #app { grid-template-columns:1fr; }
-  body.pre #left, body.pre #right, body.pre #compliance { display:none; }
+  body.pre #left, body.pre #compliance { display:none; }
   body.pre header, body.pre #timer { grid-column:1; }
 
   /* the worker (left) */
@@ -52,24 +46,6 @@
   .stat { margin:0 0 4px; font-size:14px; font-weight:bold; }
   .bar { height:6px; background:var(--soft); }
   .bar > div { height:100%; width:0; background:var(--fg); transition:width .4s; }
-
-  /* messages (right) */
-  .tabs { margin-bottom:8px; }
-  .tab { font-size:11px; padding:2px 8px; margin:0 4px 0 0; position:relative; }
-  .tab.active { background:var(--fg); color:var(--bg); }
-  .tab.unread::after { content:"•"; position:absolute; top:-9px; right:-4px; font-size:16px; color:var(--fg); }
-  #chat input { width:100%; font:inherit; font-size:12px; border:1px solid var(--fg); padding:6px; margin-bottom:12px; }
-  #inbox { background:var(--fg); color:var(--bg); padding:8px; margin-bottom:10px; animation:blink 1.2s steps(2) 3; }
-  #inbox[hidden] { display:none; }
-  #inbox .mini { background:var(--bg); color:var(--fg); border-color:var(--bg); margin-left:6px; }
-  .dm-note { font-size:11px; margin:10px 0 0; }
-  .dm-note:empty { display:none; }
-  .feed-item { margin-bottom:10px; line-height:1.4; }
-  .feed-item .who { color:var(--mid); }
-  .feed-item.system .who { color:var(--fg); font-weight:bold; }
-  .feed-item.ghost { color:var(--mid); font-style:italic; }
-  .feed-item.me .who { color:var(--fg); }
-  .feed-item.withheld { color:var(--mid); text-decoration:line-through; }
 
   /* screens before work */
   .logo-title { font-size:64px; font-weight:bold; letter-spacing:.08em; margin:0; line-height:1; }
@@ -124,7 +100,7 @@
   .mopt { min-width:86px; height:42px; padding:0 8px; margin:0; font-weight:bold; text-align:left; }
   .mopt.picked, .mopt.picked:hover { background:var(--fg); color:var(--bg); }
   .memory { display:flex; gap:140px; align-items:flex-start; }
-  .tray { display:flex; flex-direction:column; gap:4px; }
+  .tray { display:flex; flex-direction:column; gap:4px; min-width:108px; }   /* keeps its place free while the images are shown */
   .mini-cell { cursor:grab; }
   .mini-cell.selected { outline:2px solid var(--fg); outline-offset:2px; }
   .slot.empty { cursor:pointer; }
@@ -138,6 +114,8 @@
   .marked { margin-top:10px; font-size:12px; }
   .skip { display:block; width:32px; height:32px; border-radius:50%; padding:0; margin-top:120px; font-size:16px; line-height:1; }
   .skip:disabled { opacity:.35; cursor:not-allowed; }
+  /* 12:00: press it, all together. It shines above the darkening */
+  .skip.now:not(:disabled) { background:var(--fg); color:var(--bg); animation:pulse 1s steps(2) infinite; position:relative; z-index:67; }
 
   /* images made of text */
   .art { white-space:pre; line-height:1.05; margin:0; font-family:inherit; }
@@ -183,47 +161,29 @@
   table.review .verdict { font-weight:bold; padding:0 4px; }
   table.review tr.neg .verdict { background:var(--fg); color:var(--bg); }
 
-  /* the rest period */
-  .rest { text-align:center; padding-top:30px; }
-  .rest p { margin-left:auto; margin-right:auto; }
-  #rest-clock { font-size:56px; margin:10px 0; }
-
-  /* the strike */
-  .strike { text-align:center; }
-  .framed-note { border:1px solid var(--fg); padding:12px 16px; margin:16px auto; max-width:520px; text-align:left; }
-  .framed-note .big { font-size:20px; }
-  .stop { background:var(--fg); color:var(--bg); font-size:26px; font-weight:bold; padding:20px 40px; margin:16px 0;
-          animation:pulse 1.2s steps(2) infinite; }
-  .stop:hover { background:var(--bg); color:var(--fg); }
-
-  /* direct messages */
-  #modal { position:fixed; inset:0; background:rgba(0,0,0,.75); display:flex; align-items:center; justify-content:center; z-index:70; }
-  #modal[hidden], #overlay[hidden] { display:none; }
-  .dialog { background:var(--bg); border:1px solid var(--fg); box-shadow:6px 6px 0 var(--fg); width:min(560px, 92vw); padding:16px 20px; }
-  .dialog .label { margin-top:0; }
-  .dm-who { margin:0; }
-  .dm-text.big { font-size:20px; margin:6px 0 12px; }
-  .dm-hints:empty { display:none; }
-  .hint { border:1px solid var(--fg); padding:4px 8px; margin-bottom:4px; font-size:13px; }
-  .hint .who { color:var(--mid); margin-right:6px; }
-  .hint.ghost { border-style:dashed; color:var(--mid); font-style:italic; }
-  .dm-form input { width:100%; font:inherit; border:1px solid var(--fg); padding:8px; margin-top:8px; }
-  .dm-buttons { display:flex; gap:6px; margin-top:8px; }
-  .dm-buttons .opt { flex:1; margin:0; }
-  .dm-interpret { min-height:1.4em; margin:8px 0 0; font-style:italic; }
-  .dm-system { display:block; margin:4px auto 0; font-size:12px; }
-  .dm-system.urgent { background:var(--fg); color:var(--bg); text-decoration:none; padding:4px 10px; animation:blink 1s steps(2) infinite; }
-  table.share { border-collapse:collapse; margin:6px 0; font-size:12px; }
-  table.share td { padding:3px 12px 3px 0; border-bottom:1px solid var(--soft); }
-  table.share tr.you td { font-weight:bold; }
-  .card-sign { border:1px solid var(--fg); padding:16px; text-align:center; font-size:22px; font-style:italic; margin-bottom:10px; }
+  /* the workers' messages: popups next to the task (story.js places them) */
+  #popups { position:fixed; inset:0; pointer-events:none; z-index:66; }
+  #popups[hidden] { display:none; }
+  .pop { position:absolute; width:290px; background:#d6d6d6; color:#000; border:3px solid #efefef; border-radius:14px;
+         padding:12px 5px 5px; font-size:12px; line-height:1.4; pointer-events:auto;
+         opacity:0; transform:translateY(6px); transition:opacity .3s, transform .3s; }
+  .pop.in { opacity:1; transform:none; }
+  .pop p { margin:0 11px 8px; max-width:none; }
+  .pop .who { font-weight:bold; margin-right:10px; }
+  .pop .you { color:#5a5a5a; }
+  .pop.withheld .text { text-decoration:line-through; color:#7a7a7a; }
+  .pop.now { background:#fff; }
+  .pop .btns { display:flex; gap:5px; }
+  .pop .btns button { flex:1; margin:0; background:#000; color:#fff; border:none; border-radius:9px; padding:8px 0; font-size:11px; }
+  .pop .btns button:hover { background:#333; color:#fff; }
 
   /* full-screen moments */
   /* the fading: a black layer that grows more opaque, so everything (reviews included) sinks into the black.
-     It sits above the screen and the reviews, but below the coworkers' messages, which stay sharp. */
+     It sits above the screen and the reviews, but below the workers' popups, which stay sharp. */
   #veil { position:fixed; inset:0; pointer-events:none; background:#000; opacity:var(--veil); transition:opacity 2s; z-index:65; }
   /* previous fading (towards white: a grey layer that only lightens what is darker than it):
   #veil { position:fixed; inset:0; pointer-events:none; background:rgb(var(--lift), var(--lift), var(--lift)); mix-blend-mode:lighten; transition:background 2s; z-index:40; } */
+  #overlay[hidden] { display:none; }
   #overlay { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center; overflow:hidden; background:rgba(0,0,0,.8); }
   #overlay .box { background:var(--bg); border:1px solid var(--fg); box-shadow:6px 6px 0 var(--fg); padding:24px 32px; max-width:680px; width:92vw; position:relative; z-index:2; }
   #overlay .box p { max-width:none; }
@@ -254,5 +214,4 @@
     #app { grid-template-columns:1fr; height:auto; }
     header, #timer { grid-column:1; }
     #left { border-right:none; border-bottom:1px solid var(--fg); }
-    #right { border-left:none; border-top:1px solid var(--fg); }
   }

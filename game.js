@@ -2,7 +2,7 @@
    GAME
    Screens, the rounds of tasks (one round per profile), the (rigged) review
    at the end of each round, resets, disappearing, the strike and the endings.
-   Texts, settings and the demo tasks: content.js · Tasks: tasks.js · Messages: story.js
+   Texts, settings and the demo tasks: content.js · Tasks: tasks.js · Messages (popups): story.js
    ===================================================================== */
 
 const qs = new URLSearchParams(location.search);
@@ -14,8 +14,7 @@ const fmt = (s, v={}) => String(s).replace(/\{(\w+)\}/g, (_, k) => v[k] ?? "");
 const clock = s => { const c = Math.max(0, Math.ceil(s)); return `${Math.floor(c / 60)}:${String(c % 60).padStart(2, "0")}`; };
 
 const G = { worker:null, used:[], name:"", id:"", resets:0, pos:0, round:[], roundNo:1,
-            task:null, timer:null, cleanup:null, tasksDone:0, history:[], busy:false, ended:false,
-            timeoutsInRow:0, onBreak:false };
+            task:null, timer:null, cleanup:null, tasksDone:0, history:[], busy:false, ended:false };
 
 const presence = () => CONFIG.PRESENCE[Math.min(G.resets, CONFIG.PRESENCE.length - 1)];
 const resetsLeft = () => Math.max(0, CONFIG.PRESENCE.length - 1 - G.resets);
@@ -24,7 +23,7 @@ const visible = p => 1 - (1 - p) * CONFIG.SCREEN_FADE;   // how visible the scre
 // the fading: a black layer over the whole screen (0 = none, 1 = everything black)
 const setFade = amount => document.documentElement.style.setProperty("--veil", amount.toFixed(2));
 // previous fading (towards white): const setFade = amount => document.documentElement.style.setProperty("--lift", Math.round(255 * amount));
-const roundLength = () => CONFIG.ROUND.length;
+const roundLength = () => G.worker ? DEMO[G.worker.id].length : 4;
 
 /* ---------------- header + side panel ---------------- */
 function setTime(text, fraction){
@@ -42,28 +41,6 @@ function updatePanels(){
   $("#chain-bar").style.width = (G.pos / roundLength() * 100) + "%";
   $("#resets").textContent = Array.from({ length:resetsLeft() }, () => "(*)").join(" ");
   $("#hdr").textContent = `${G.id} · ${taskOf}`;
-}
-
-/* ---------------- channel, break room and chat ---------------- */
-let activeTab = "channel";
-function post(where, from, text, kind="worker"){
-  const feed = $(where === "break" ? "#feed-break" : "#feed-channel");
-  const d = document.createElement("div");
-  d.className = "feed-item " + kind;
-  d.innerHTML = `<span class="who">${esc(from)}</span><br>${esc(text)}`;
-  feed.prepend(d);
-  if(where !== activeTab) $("#tab-" + where).classList.add("unread");
-  Sound.play(kind === "system" ? "system" : "message");
-}
-function showTab(tab){
-  activeTab = tab;
-  $("#feed-channel").hidden = tab !== "channel"; $("#feed-break").hidden = tab !== "break";
-  $("#tab-channel").classList.toggle("active", tab === "channel"); $("#tab-break").classList.toggle("active", tab === "break");
-  $("#tab-" + tab).classList.remove("unread");
-  setChat();
-}
-function setChat(){
-  $("#chat-input").placeholder = fmt(TEXT.chat.on, { tab:activeTab === "break" ? TEXT.panels.breakroom : TEXT.panels.channel });
 }
 
 /* =====================================================================
@@ -174,7 +151,6 @@ function showOnboarding(){
 
 function startWork(){
   G.id = "worker_" + randInt(1000, 9999);
-  if(CONFIG.CHATS) Story.start();
   startRound();
 }
 function startRound(){
@@ -189,7 +165,6 @@ function startRound(){
    ===================================================================== */
 function nextTask(){
   if(G.ended) return;
-  if(Story.strikeReady()) return showStrike();
   G.busy = false;
   const spec = DEMO[G.worker.id][G.pos % DEMO[G.worker.id].length];
   const t = { ...spec, kind:spec.type };
@@ -204,9 +179,15 @@ function nextTask(){
     <button id="skip" class="skip" title="${esc(TEXT.task.skip)}" aria-label="${esc(TEXT.task.skip)}">→</button>
   </section>`;
   G.cleanup = DEMO_TYPES[t.kind].render(t, $("#task-body"), () => setTimeout(() => submitTask("done"), CONFIG.SUBMIT_PAUSE)) || null;
-  // the arrow: skipping a task, like a strike of one. It only works once the worker has joined the others.
-  $("#skip").onclick = () => { if(Story.joined()) submitTask("skipped"); };
+  // the arrow: skipping a task. It only works while the worker is with the others;
+  // pressed at 12:00, all together, it is the strike
+  $("#skip").onclick = () => {
+    if(G.busy) return;
+    if(Chat.isNow()) return strike();
+    if(Chat.canSkip()) submitTask("skipped");
+  };
   startTimer();
+  Chat.taskStarted();
 }
 
 function startTimer(){
@@ -215,7 +196,8 @@ function startTimer(){
   const tick = () => {
     const left = (deadline - performance.now()) / 1000;
     setTime(clock(left), left / CONFIG.TASK_SECONDS);
-    const s = $("#skip"); if(s) s.disabled = !Story.joined() || G.busy;
+    const s = $("#skip");
+    if(s){ s.disabled = !(Chat.canSkip() || Chat.isNow()) || G.busy; s.classList.toggle("now", Chat.isNow()); }
     if(left <= 0){ clearInterval(G.timer); submitTask("timeout"); }
   };
   tick(); G.timer = setInterval(tick, 200);
@@ -231,79 +213,31 @@ async function submitTask(action){
   G.history.push({ action, negative });
   G.round.push({ kind:G.task.kind, action, negative });
   G.pos++; G.tasksDone++;
-  G.timeoutsInRow = action === "timeout" ? G.timeoutsInRow + 1 : 0;
+  Chat.taskEnded();
   document.querySelectorAll("#task-body button, #skip").forEach(b => b.disabled = true);
   updatePanels();
 
   await wait(300);
-  if(CONFIG.CHATS) Story.afterTask();
-  const next = CONFIG.ROUND[G.pos - 1];
-  if(next === "rest") await takeBreak();
-  if(next === "survey") await takeSurvey();
   if(G.ended) return;
-  if(G.pos >= roundLength()){ await review(); if(G.ended) return; return; }
+  if(G.pos >= roundLength()) return review();
   nextTask();
-}
-
-/* ---------------- the mandatory rest period (only if "rest" is in CONFIG.ROUND) ---------------- */
-async function takeBreak(){
-  if(G.ended) return;
-  G.onBreak = true; Sound.play("rest");
-  const r = TEXT.rest, seconds = FAST ? 3 : CONFIG.BREAK_SECONDS;
-  $("#main").innerHTML = `<section class="rest">
-    <p class="label">${r.label}</p>
-    <p class="big" id="rest-clock"></p>
-    <p>${r.text}</p>
-    <p class="muted">${r.small}</p></section>`;
-  const ends = performance.now() + seconds * 1000;
-  const countdown = new Promise(res => {
-    const iv = setInterval(() => {
-      const left = (ends - performance.now()) / 1000;
-      $("#rest-clock").textContent = clock(left);
-      setTime(`${r.header} ${clock(left)}`, left / seconds);
-      if(left <= 0){ clearInterval(iv); res(); }
-    }, 500);
-  });
-  const chatter = setInterval(Story.chatter, FAST ? 300 : 7000);
-  Story.onBreak();
-  await countdown;
-  clearInterval(chatter);
-  G.onBreak = false; setTime("", 0);
-  if(!$("#modal").hidden){ const b = document.querySelector(".dm-system"); b.textContent = TEXT.dialog.restOver; b.classList.add("urgent"); }
-}
-
-/* ---------------- the wellbeing survey (only if "survey" is in CONFIG.ROUND) ---------------- */
-async function takeSurvey(){
-  if(G.ended) return;
-  while(Dialog.isOpen()) await wait(300);
-  G.onBreak = true;
-  const r = TEXT.surveyBreak;
-  $("#main").innerHTML = `<section class="rest">
-    <p class="label">${r.label}</p>
-    <p>${r.text}</p>
-    <p class="muted">${r.small}</p></section>`;
-  setTime(r.header, 1);
-  await Story.survey();
-  G.onBreak = false; setTime("", 0);
 }
 
 /* ---------------- the review at the end of a round ----------------
    It always fails (CONFIG.REVIEW_FAIL). A failed review costs a reset and the screen
-   gets darker; the next round is played with another profile. Organised workers
-   cover for each other. With no resets left, the worker disappears. */
+   gets darker; the next round is played with another profile. With no resets left,
+   the worker disappears. */
 function review(){
   const e = TEXT.evaluation, r = TEXT.reset;
   const failed = G.round.filter(x => x.negative).length >= CONFIG.REVIEW_FAIL;
-  const covered = failed && Story.progress() >= 1;
-  if(failed && !covered) G.resets++;
+  if(failed) G.resets++;
+  Chat.hide();
   const gone = G.resets >= CONFIG.PRESENCE.length;
   Sound.play(failed ? "reset" : "positive");
   const o = overlay("review", `<div class="box">
     <p class="big">${failed ? e.failed : e.passed}</p>
     ${gone ? "" : `<p class="statement">${failed ? e.failedBody : e.passedBody}</p>
-      ${covered
-        ? `<p class="framed-note"><span class="muted">${esc(personLabel(r.coveredBy))}</span><br>${esc(r.covered)}</p>`
-        : `<p>${fmt(r.remaining, { n:resetsLeft() })}</p>`}
+      <p>${fmt(r.remaining, { n:resetsLeft() })}</p>
       <button>${r.button}</button>`}
     </div>`);
   return new Promise(res => {
@@ -311,7 +245,6 @@ function review(){
     o.querySelector("button").onclick = () => {
       closeOverlay();
       G.roundNo++;
-      if(failed && CONFIG.CHATS) Story.afterReset();
       updatePanels();
       showProfiles(true);
       res();
@@ -321,8 +254,7 @@ function review(){
 
 /* ---------------- ENDING A: disappearing ---------------- */
 async function disappear(){
-  G.ended = true; $("#modal").hidden = true; Story.refreshInbox();
-  rememberDisappeared(G.id);
+  G.ended = true; Chat.clear();
   setFade(1);                                        // everything goes black: the worker is gone
   Sound.play("vanish");
   await wait(2200);
@@ -339,33 +271,22 @@ async function disappear(){
   o.querySelector("button").onclick = () => location.reload();
 }
 
-/* ---------------- the strike ---------------- */
-function showStrike(){
-  G.busy = true;
-  const s = TEXT.strike;
-  // organising together gives the worker their presence back
-  updatePanels();                                    // the side panel shows the same task number as the strike screen
-  setFade(0);
-  $("#main").innerHTML = `<section class="task strike">
-    <p class="label">${fmt(TEXT.task.of, { n:G.pos + 1, total:roundLength() })}</p>
-    <div class="framed-note"><span class="muted">${esc(personLabel(s.from))}</span><br><span class="big">${esc(s.now)}</span></div>
-    <button id="stop" class="stop">${s.stop}</button>
-    <p class="muted">${esc(s.system)}</p>
-    <button id="keep" class="link">${s.keep}</button>
-  </section>`;
-  $("#keep").onclick = () => { Story.postponeStrike(); nextTask(); };   // nextTask() brings presence back to where it was
-  $("#stop").onclick = strike;
-}
-
+/* ---------------- the strike ----------------
+   12:00: the worker presses the arrow together with the others. Everyone skips at once. */
 async function strike(){
-  G.ended = true; $("#modal").hidden = true; Story.refreshInbox();
+  if(G.ended) return;
+  G.ended = true; G.busy = true; clearInterval(G.timer); setTime("", 0);
+  if(G.cleanup){ G.cleanup(); G.cleanup = null; }
+  Chat.strike();
   document.querySelectorAll("#main button").forEach(b => b.disabled = true);
+  setFade(0);                                        // together, the worker is fully there again
   Sound.play("alarm");
-  for(const [who, text] of TEXT.strike.flood){ post("channel", personLabel(who), text, personKind(who)); await wait(260); }
-  for(const line of TEXT.strike.systemLines){ post("channel", "SYSTEM", line, "system"); await wait(700); }
+  for(const [who, text] of TEXT.strike.flood){ Chat.say(who, text, 12, true); await wait(260); }
+  for(const line of TEXT.strike.systemLines){ Chat.say("SYSTEM", line, 12, true); await wait(700); }
   const c = $("#compliance"); c.textContent = TEXT.compliance.fail; c.classList.add("fail");
   Sound.play("alarm");
   await wait(1800);
+  Chat.clear();
   await endingFired();
   await endingFailure();
   endingWon();
@@ -421,21 +342,7 @@ document.title = TEXT.title;
 $("#brand").innerHTML = TEXT.brand;
 $("#compliance").textContent = TEXT.compliance.ok;
 $("#lbl-resets").textContent = TEXT.panels.resets;
-$("#tab-channel").textContent = TEXT.panels.channel;
-$("#tab-break").textContent = TEXT.panels.breakroom;
-$("#tab-channel").onclick = () => showTab("channel");
-$("#tab-break").onclick = () => showTab("break");
-$("#chat").onsubmit = e => {
-  e.preventDefault();
-  const i = $("#chat-input"), text = i.value.trim();
-  if(!text) return;
-  Story.playerWrote(activeTab, text); i.value = "";
-};
-if(!CONFIG.CHATS) document.body.classList.add("nochat");   // no chats: no right column
-$("#dm-input").placeholder = TEXT.dialog.placeholder;
-document.querySelector(".dm-tag").textContent = TEXT.dialog.direct;
-document.querySelector(".dm-system").textContent = TEXT.dialog.backToWork;
 const renderMute = () => { $("#mute").textContent = Sound.isMuted() ? TEXT.panels.soundOff : TEXT.panels.sound; };
 $("#mute").onclick = () => { Sound.setMuted(!Sound.isMuted()); renderMute(); };
-renderMute(); setChat();
+renderMute();
 showVerification();

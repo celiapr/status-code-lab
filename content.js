@@ -1,7 +1,7 @@
 /* =====================================================================
    CONTENT — everything the team may want to change lives here:
-   settings, texts, the three workers, the task images (text-based), the task
-   material and the story (messages, the question, the union, endings).
+   settings, texts, the three workers, the verification images, the demo tasks
+   and the other workers' messages (popups).
    Write {n}, {total}… where a text needs a number; the game fills it in.
 
    ASCII images: write them between String.raw` and `
@@ -12,31 +12,30 @@
 /* ---------------- SETTINGS ---------------- */
 const CONFIG = {
   TASK_SECONDS: 60,            // time limit per task
-  // what comes after each task of a round: "" (nothing), "rest" or "survey".
-  // Its length is the number of tasks per round. Rest periods and surveys are switched off for the demo;
-  // write "rest" or "survey" in a slot to bring them back.
-  ROUND: ["", "", "", ""],
   REVIEW_FAIL: 0,              // negative evaluations in a round that make the review fail; 0 = it always fails
   // presence (how visible the screen is) in each round. One round per profile: 3 profiles, 3 rounds.
   // Failing the review of the last round means disappearing (WORKER NOT FOUND)
   PRESENCE: [1, 0.6, 0.3],
   SCREEN_FADE: 1,              // how much the whole screen fades towards black as presence drops (0 = not at all, 1 = fully)
-  CHATS: false,                // the right column (Channel, Break room, chat) and the coworkers' messages. Off for the demo
   SUBMIT_PAUSE: 700,           // milliseconds before the next task once a task is finished
   MEMORY_SECONDS: 5,           // memory grid: seconds the images stay visible before they disappear
 
-  // mandatory rest period (only if "rest" is in ROUND): no work allowed
-  BREAK_SECONDS: 30,           // length of the rest period
-  UNION_REOFFER_AFTER: 2,      // tasks before a coworker's message that was turned down comes back
+  // the workers' messages (popups). Their texts and order: MESSAGES, at the end of this file
+  POPUPS_FROM_TASK: 2,         // the first popup comes during this task (counting every task of the game)
+  QUIET_TASKS: 2,              // after turning a message down or leaving it unanswered: tasks with no messages.
+                               // Then the same message comes back
+  POPUP_FIRST: 2,              // seconds into a task before the first popup (and when the messages come back)
+  POPUP_GAP: 3,                // seconds between a reply and the next message
+  POPUP_LINE_GAP: 2.5,         // seconds between chat lines
+  POPUP_STAY: 9,               // seconds a chat line stays on screen
+  // Popups only move on while a task is on screen.
 
-  // the rigged evaluation: chance that a task counts as NEGATIVE (shown when comparing evaluations)
+  // the rigged evaluation: chance that a task counts as NEGATIVE
   NEGATIVE: {
     done: 0.7,                 // finished the task
     timeout: 1,                // ran out of time
     skipped: 1                 // used the arrow to skip it
-  },
-
-  GHOST_MESSAGE_CHANCE: [0.25, 0.45, 0.65, 0.9] // chance of a message from a disappeared worker after each task, by resets
+  }
 };
 /* Testing: add ?seconds=10 to the address for 10 seconds per task,
    and ?fast to shorten every pause. Example: index.html?seconds=10&fast */
@@ -53,21 +52,6 @@ const WORKERS = [
     specialty:"Food",
     quote:"I thought my job was safe, until people started craving AI-generated dishes that I simply couldn't make…" }
 ];
-
-/* ---------------- OTHER WORKERS (characters in the messages) ----------------
-   disappeared:true shows only their ID: they have lost their name. */
-const PEOPLE = {
-  marisol: { name:"Marisol", id:"worker_0412" },
-  ines:    { name:"Inés",    id:"worker_0230" },
-  kwame:   { name:"Kwame",   id:"worker_0771" },
-  tomas:   { name:"Tomás",   id:"worker_0098", disappeared:true },
-  w1188:   { id:"worker_1188", disappeared:true },
-  w0655:   { id:"worker_0655", disappeared:true },
-  w2210:   { id:"worker_2210", disappeared:true },
-  wxxxx:   { id:"worker_????", disappeared:true },
-  hr:      { name:"Wellbeing team", id:"HVL" },
-  system:  { name:"SYSTEM", id:"" }
-};
 
 /* ---------------- INTERFACE TEXTS ---------------- */
 const TEXT = {
@@ -125,50 +109,20 @@ const TEXT = {
   },
   compliance: { ok:"Human quota 13% · COMPLIANT", fail:"Human quota 0% · NON-COMPLIANT" },
   panels: { chain:"Round {n}", chainOf:"Task {n} of {total}",
-            resets:"Resets remaining", channel:"Channel", breakroom:"Break room", sound:"sound on", soundOff:"sound off" },
+            resets:"Resets remaining", sound:"sound on", soundOff:"sound off" },
   task: {
     of: "Task {n} of {total}",
-    skip: "skip this task"      // the arrow; it only works once the worker has joined the others
+    skip: "skip this task"      // the arrow; it only works while the worker is with the others (see MESSAGES)
   },
   // the review at the end of each round: the only evaluation the worker sees
   evaluation: {
-    label: "Automated review · Round {n}",
-    positive: "POSITIVE",
-    negative: "NEGATIVE",
-    actions: {
-      validated: "validated",
-      corrected: "corrected",
-      timeout:   "out of time"
-    },
-    footer: "These decisions have been added to the Model's training data.",
     failed: "REVIEW FAILED",
     failedBody: "Please start again.",
     passed: "REVIEW PASSED",
     passedBody: "A new round begins."
   },
-  rest: {
-    header: "REST",
-    label: "Mandatory rest period",
-    text: "Work is unavailable until the rest period ends.",
-    small: "Rest periods are not counted as working time."
-  },
-  // the wellbeing survey slot, between tasks
-  surveyBreak: {
-    header: "SURVEY",
-    label: "Wellbeing survey",
-    text: "Work resumes when the survey is complete.",
-    small: "Participation is mandatory."
-  },
-  chat: {
-    on: "write to the {tab} and press Enter",
-    you: "you"
-  },
-  inbox: { text:"New message from {who}", open:"open" },
   reset: {
     remaining: "Resets remaining: {n}",
-    // after joining the others, a failed review no longer makes the worker fade
-    covered: "We covered for you.",
-    coveredBy: "marisol",
     button: "Back to work"
   },
   // when the worker disappears (the "game over", told in the platform's own words)
@@ -181,29 +135,12 @@ const TEXT = {
     counter: "Tasks validated since: {n}",
     button: "Apply again"
   },
-  dialog: {
-    direct: "Direct message",
-    survey: "Wellbeing survey",
-    placeholder: "type your reply and press Enter",
-    backToWork: "back to work",
-    restOver: "REST PERIOD OVER · back to work",
-    interpreted: "Interpreted as: {answer}",
-    normalised: "No clear answer detected. Response normalised to: {answer}",
-    unclear: "Sorry, I didn't get that. Yes or no?",
-    // hintsFrom: "Messages from others in the system",
-    close: "Close"
-  },
+  // everyone skips at 12:00: the workers' popups pour in, then the platform's
   strike: {
-    from: "marisol",
-    now: "now.",
-    system: "Leaving a task unfinished will be recorded in your evaluation.",
-    stop: "STOP WORKING",
-    keep: "keep working",
     flood: [
-      ["marisol","stopped."], ["kwame","stopped."], ["ines","stopped."],
-      ["worker_0311","stopped."], ["worker_0527","stopped."], ["worker_0613","stopped."], ["worker_0702","stopped."],
-      ["worker_0849","stopped."], ["worker_0954","stopped."], ["worker_1027","stopped."], ["worker_1146","stopped."],
-      ["tomas","…stopped."]
+      ["W4","skipped."], ["W1","skipped."], ["W2","skipped."], ["W3","skipped."], ["W5","skipped."],
+      ["worker_0311","skipped."], ["worker_0527","skipped."], ["worker_0613","skipped."], ["worker_0702","skipped."],
+      ["worker_0849","skipped."], ["worker_0954","skipped."], ["worker_1027","skipped."], ["worker_1146","skipped."]
     ],
     systemLines: [
       "Inactivity detected.",
@@ -269,7 +206,7 @@ const VERIFY = {
    Each profile has 4 tasks, always in this order. Everything is fixed: the demo never plays a profile twice.
    Images:  { src:"img/…" }      Text:  { text:"…" }   (text is drawn in the monospace font)
    Images are the team's originals in img/, used exactly as they are (worker1 = the Actor, worker2 = the Cook).
-   The Software Engineer's are in img/game/ for now. */
+   The Software Engineer's photos are in img/engineer/. */
 const DEMO_TEXT = {
   odd:         { title:"Identify the different element",
                  instruction:"One element in the grid is different from the others.<br>Select the right one." },
@@ -363,146 +300,76 @@ except Reset:
 };
 
 /* =====================================================================
-   THE STORY
+   THE WORKERS' MESSAGES
+   Popups that appear one after another during the tasks, from the second task on
+   (CONFIG.POPUPS_FROM_TASK). The workers are organising: the collective action is
+   to press the arrow (SKIP) all at the same time.
+
+   Each message:
+   - from, text: who writes and what.
+   - with yes / no: a question with two buttons, YES and NO. reply = the answer that comes back.
+     · survey:true → the company's survey: the answers change nothing.
+     · otherwise, answering brings the worker in with the others, and the arrow works from then on;
+       unless the answer has drop:true (turning them down). Turning them down, or leaving a question
+       unanswered until the end of the next task: the arrow stops working, no messages for
+       CONFIG.QUIET_TASKS tasks, and then the same message comes back.
+   - without yes / no: a chat line. It stays a few seconds (CONFIG.POPUP_STAY) and goes.
+     · withheld:true → the platform strikes it through a moment later.
+   - now:true → the moment of the collective action. It stays until the worker presses the arrow
+     (the strike → the endings) or leaves it until the end of the next task (= turning them down).
    ===================================================================== */
-const STORY = {
-  /* messages in the Channel when work starts. {id} = the player's worker ID */
-  start: [
-    ["system", "Welcome back. You are {id}. Your contribution keeps this company compliant."],
-    ["ines", "first day? breathe. the clock is the only thing they check"],
-    ["kwame", "fyi nobody has ever passed a review. just saying"]
-  ],
+const MESSAGES = [
+  // the company's wellbeing survey
+  { from:"SYSTEM", survey:true, text:"Everything OK at work?",
+    yes:{ reply:"Thank you. Your wellbeing matters to us." },
+    no:{ reply:"Your response has been recorded." } },
+  { from:"SYSTEM", survey:true, text:"Do you feel supported by your team?",
+    yes:{ reply:"Thank you. Your wellbeing matters to us." },
+    no:{ reply:"Thank you. Your wellbeing matters to us." } },
+  { from:"SYSTEM", survey:true, text:"Is there anything you would like to share with management?",
+    yes:{ reply:"Your response has been recorded." },
+    no:{ reply:"Your response has been recorded." } },
 
-  /* the company's wellbeing survey, between tasks: the question that changes everything */
-  question: {
-    from: "hr",
-    // a new wording each time it is asked again
-    texts: ["Everything OK at work?", "Everything OK at work?", "Is everything OK at work?", "Everything still OK at work?", "Everything OK at work?"],
-    // the small print under the survey: the company implicitly asks for a good answer
-    note: "Your response will be taken into account in your performance evaluation.",
-    yes: { label:"YES", keywords:["yes","yeah","yep","yup","fine","good","great","ok","okay","alright","all right","sure","of course","perfect","si","sí"] },
-    no:  { label:"NO",  keywords:["no","nope","nah","not","n't","bad","terrible","awful","horrible","help","tired","exhausted","never","hate","stressed","sad","worse"] },
-    // one hint in the Channel each time the survey is asked, until the player answers NO; one list per time it has been asked (the last list repeats)
-    hints: [
-      [["tomas","NO."]],
-      [["ines","there's a way out."], ["tomas","Say NO."]],
-      [["tomas","They reset me three times before I understood."], ["kwame","A good score never got anyone out of here."], ["w1188","NO."]],
-      [["tomas","say no"], ["w0655","say no"], ["w2210","say NO"], ["ines","Please. Say no."], ["wxxxx","no"]]
-    ],
-    afterYes: ["system", "Wellbeing survey completed: OK. Thank you."],
-    afterNo: ["system", "Response recorded. Your evaluation has been updated."]
-  },
+  // a private message from another worker
+  { from:"W5", text:"Hey. Everything OK at work?",
+    yes:{ reply:"Glad to hear that. Just checking.", drop:true },
+    no:{ reply:"Yeah. It's getting harder every day." } },
+  { from:"W5", text:"Do you feel supported by the people working alongside you?",
+    yes:{ reply:"That's good. We should look out for each other." },
+    no:{ reply:"Neither do I. We're all dealing with the same thing." } },
+  { from:"W5", text:"Have you ever thought about talking to the others about what's going on?",
+    yes:{},
+    no:{ reply:"I understand. But maybe we should. Things won't change otherwise.", drop:true } },
+  { from:"W5", text:"There's a few of us already talking. Want me to add you?",
+    yes:{},
+    no:{ reply:"I understand. But maybe we should. Things won't change otherwise.", drop:true } },
 
-  /* the road to the union. The first message arrives after the first task, then one per task;
-     they are opened with "open" (or by themselves in rest periods, if there are any).
-     action: what happens when the player accepts (breakroom, share, sign or nothing). */
-  union: [
-    { from:"marisol", action:"breakroom",
-      text:"hey. a few of us talk somewhere they don't look. want to come?",
-      again:"still there if you want to come.",
-      accept:{ label:"ok", keywords:["yes","yeah","yep","sure","ok","okay","in","come","join","why not","fine","si","sí","vale"] },
-      decline:{ label:"not now", keywords:["no","nope","nah","not now","later","not yet","can't","cannot","won't","wait"] },
-      reply:"it's the break room tab.", declineReply:"no worries." },
-    { from:"kwame", action:"share",
-      text:"we've been putting our reviews side by side. want to add yours?",
-      again:"still up for comparing reviews?",
-      accept:{ label:"sure", keywords:["yes","yeah","sure","ok","okay","share","fine","add","si","sí","vale"] },
-      decline:{ label:"I'd rather not", keywords:["no","nope","nah","rather not","private","not now","later","not yet","won't"] },
-      declineReply:"fair. have a look at yours sometime." },
-    { from:"ines", action:"",
-      text:"have you noticed they only ever reset one of us at a time?",
-      again:"been thinking about what I said? one at a time.",
-      accept:{ label:"I'm with you", keywords:["yes","yeah","sure","ok","okay","with you","noticed","true","agree","right","si","sí","vale"] },
-      decline:{ label:"I'm not sure", keywords:["no","nope","nah","not sure","unsure","maybe","not now","later","not yet","don't know"] },
-      reply:"yeah.", declineReply:"take your time." },
-    { from:"marisol", action:"sign", freeText:true,
-      text:"we're keeping a list. just names. add yours?",
-      again:"the list's still open.",
-      accept:{ label:"add my name", keywords:[] },
-      decline:{ label:"not yet", keywords:["no","nope","nah","not now","later","not yet","wait"] },
-      declineReply:"ok." },
-    { from:"marisol", action:"",
-      text:"next task, we just don't. all of us. you in?",
-      again:"still on. next task.",
-      accept:{ label:"I'm in", keywords:["yes","yeah","sure","ok","okay","in","ready","together","let's","lets","si","sí","vale"] },
-      decline:{ label:"not yet", keywords:["no","nope","nah","not now","later","not yet","wait","can't","time"] },
-      reply:"ok.", declineReply:"whenever you're ready." }
-  ],
-  strikePostponed: ["marisol", "we're still here."],
+  // the workers' chat: the worker comes in in the middle of the conversation
+  { from:"W2", text:"just tagging cats all day" },
+  { from:"W4", text:"35 labels left till the break" },
+  { from:"W1", text:"queue refills the second you finish" },
+  { from:"W3", text:"click work till my wrist hurts" },
+  { from:"W2", text:"i'm 12 tasks off quota" },
+  { from:"W4", text:"a wellness webinar instead of a raise" },
+  { from:"W1", text:"great pay, no benefits 🙃" },
+  { from:"W3", text:"rest period ends in 10 seconds" },
+  { from:"W1", text:"ok so click the SKIP button alone, that's a reset" },
+  { from:"W2", text:"only one of us gets a reset each time. always one" },
+  { from:"W3", text:"if we all click SKIP at the same time, the Model can't reset us all" },
+  { from:"W4", text:"everyone click the SKIP button at once. that's the collective action" },
+  { from:"W1", text:"a work stoppage at 12:00. all of us. will you?",
+    yes:{}, no:{ drop:true } },
+  { from:"W2", text:"we're 4 now. add yours" },
+  { from:"W3", text:"tell them in the back channel. whisper network" },
+  { from:"W4", text:"workers together. we need to be a union", withheld:true },
+  { from:"SYSTEM", text:"1 message withheld: contains 'union'" },
+  { from:"W2", text:"they stopped our message 😭" },
+  { from:"W1", text:"that's why. they need a scapegoat. not us. all of us together" },
+  { from:"W3", text:"SKIP button at 12:00. not before" },
+  { from:"W4", text:"i'm in" },
+  { from:"W1", text:"i'm in" },
+  { from:"W2", text:"i'm in" },
 
-  /* the break room fills up during rest periods, after joining */
-  breakroom: [
-    ["kwame", "my model flagged a dot as a face today"],
-    ["ines", "I validated it. negative. corrected it. negative."],
-    ["marisol", "same for all of us. it's not a bug, it's the job"],
-    ["kwame", "I'm in Accra, by the way. on paper I'm in Madrid. that's how they make the 13%"],
-    ["ines", "my job used to be one job. now it's 40 tasks a day and none of them is mine"],
-    ["kwame", "they reset Tomás four times. then he was just… gone. his ID still posts sometimes"],
-    ["marisol", "anyone else's survey come back with a follow-up? mine did"],
-    ["kwame", "every task we validate trains the thing that replaces us"],
-    ["ines", "they reset me on a tuesday. nobody else got reset that day. they never do two"]
-  ],
-
-  /* what the others' evaluations look like, shown when the player shares theirs */
-  share: {
-    title: "Evaluations compared",
-    header: ["", "negative evaluations"],
-    rows: [
-      ["Marisol", "71% negative"],
-      ["Kwame", "75% negative"],
-      ["Inés", "68% negative"]
-    ],
-    you: "You",
-    format: "{pct}% negative",       // {pct} = share of negative evaluations
-    none: "—",                       // when the player hasn't done it yet
-    conclusion: "Everybody's numbers look the same. It isn't you."
-  },
-
-  /* signing the card */
-  sign: { counting:"the list", done:"ok. you're on it." },
-
-  /* chatting during rest periods.
-     The Channel is monitored: messages with these words are withheld. */
-  chat: {
-    monitoredWords: ["union","strike","organise","organize","stop","together","collective","quota","sindicato","huelga"],
-    withheld: "[message withheld · under review]",
-    channelReplies: [["ines", "ha. same"], ["kwame", "careful what you write here"], ["ines", "hang in there"], ["kwame", "they read this channel, you know"]],
-    breakroomReplies: [["marisol", "we hear you"], ["kwame", "exactly"], ["ines", "it's the same for all of us"], ["marisol", "say that again on the day"], ["kwame", "written down. thanks"]]
-  },
-
-  /* messages from disappeared workers, by number of resets (more and more insistent) */
-  ghosts: [
-    [["tomas","if you're reading this, I'm still here. somewhere in the queue"],
-     ["w1188","the reviews are random. I stopped trying to understand them"],
-     ["w0655","I used to check if my corrections went anywhere. they don't"]],
-    [["tomas","they reset me too. the first time it doesn't feel like much"],
-     ["w0655","talk to the others. I didn't"],
-     ["w1188","you can't finish it alone. nobody can"],
-     ["tomas","they don't need our answers. they need us on the payroll"]],
-    [["tomas","after a while you start forgetting your own name"],
-     ["w2210","say no. say NO. say no."],
-     ["w0655","I tried breaking it on my own. they just reset me"],
-     ["w2210","the tasks are just there so the numbers add up"]],
-    [["tomas","I can't remember when I stopped being anyone"],
-     ["wxxxx","…please"],
-     ["tomas","they need you to say yes"],
-     ["w2210","answer no. answer no. answer no."]]
-  ],
-
-  /* living coworkers in the Channel, now and then */
-  channel: [
-    ["kwame", "my model just said two identical faces are different"],
-    ["ines", "anyone else's timer skip ten seconds? no? just me?"],
-    ["kwame", "corrected the model. negative. didn't correct it. negative. love that for us"],
-    ["ines", "13% human. we're the 13%. feels like less"]
-  ],
-
-  /* after a reset */
-  afterReset: [["ines", "they reset you? happens to all of us"], ["tomas", "it gets lighter every time. you get lighter"]],
-
-  /* when the player lets several tasks time out on purpose: individual sabotage doesn't work */
-  sabotage: ["w0655", "going slow alone just gets you reset. together it's called a strike"],
-
-  /* players who disappeared in earlier games on this computer come back as ghosts */
-  pastPlayers: ["I said yes every time. don't.", "I was someone before this. I think.", "answer no. I couldn't."]
-};
+  // 12:00
+  { from:"W1", text:"12:00. SKIP. now.", now:true }
+];

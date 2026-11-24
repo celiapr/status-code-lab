@@ -1,282 +1,158 @@
 /* =====================================================================
-   STORY
-   Messages from other workers, the "Everything OK at work?" question,
-   the steps towards the union (during rest periods) and the chat.
-   All texts are in STORY (content.js).
+   MESSAGES (popups)
+   The company's survey, a worker writing privately (W5) and the workers' chat,
+   where they organise. Texts and order: MESSAGES (content.js); timing: CONFIG.
+   - The popups start during task CONFIG.POPUPS_FROM_TASK and only move on while a task is on screen.
+   - They appear in the empty space next to the task, somewhere different each time, without covering it.
+   - Answering a worker brings the player in with the others: the arrow (skip) works.
+   - Turning them down, or leaving a question unanswered until the end of the next task: the arrow
+     stops working, no messages for CONFIG.QUIET_TASKS tasks, then the same message comes back.
+   - The last message is the moment to press the arrow all together: the strike.
    ===================================================================== */
 
-/* ---------------- who is talking ---------------- */
-function personLabel(key){
-  const p = PEOPLE[key];
-  if(!p) return key;                                   // a plain ID such as "worker_0311"
-  if(key === "system") return "SYSTEM";
-  return p.disappeared ? `${p.id} [disappeared]` : `${p.name} · ${p.id}`;
-}
-function personKind(key){
-  const p = PEOPLE[key];
-  return key === "system" ? "system" : p && p.disappeared ? "ghost" : "worker";
-}
+const Chat = (() => {
+  const S = { idx:0, joined:false, quietUntil:0, active:false, activeMs:0, fresh:true, open:null, now:false, started:false };
+  const layer = () => document.getElementById("popups");
+  const STEP = 100;
+  setInterval(() => { if(S.active) S.activeMs += FAST ? STEP * 8 : STEP; }, STEP);
 
-/* ---------------- reading what the player types ----------------
-   The answer is matched against each option's keywords (the last option
-   is checked first, so "not ok" counts as NO and not as OK). */
-function interpret(text, options){
-  const t = " " + text.toLowerCase().replace(/[’`]/g, "'").replace(/[^\p{L}\p{N}' ]+/gu, " ") + " ";
-  for(let i = options.length - 1; i >= 0; i--){
-    for(const kw of options[i].keywords || []){
-      if(kw.includes("'") ? t.includes(kw) : new RegExp(`[^\\p{L}]${kw}[^\\p{L}]`, "u").test(t)) return i;
+  /* waiting: for a condition, or for some seconds of task time (the clock stops between tasks) */
+  const until = fn => new Promise(res => { const iv = setInterval(() => { if(fn()){ clearInterval(iv); res(); } }, STEP); });
+  const taskTime = s => { const end = S.activeMs + s * 1000; return until(() => S.activeMs >= end); };
+  const ready = () => S.active && !G.ended && G.tasksDone + 1 >= CONFIG.POPUPS_FROM_TASK && G.tasksDone >= S.quietUntil;
+
+  /* ---------------- the popups ---------------- */
+  function popup(from, html, cls="", anywhere=false){
+    const p = document.createElement("div");
+    p.className = "pop " + cls;
+    p.innerHTML = `<p><span class="who">${esc(from)}</span><span class="text">${html}</span></p>`;
+    layer().appendChild(p);
+    place(p, anywhere);
+    requestAnimationFrame(() => p.classList.add("in"));
+    return p;
+  }
+  function remove(p, after=0){
+    setTimeout(() => { p.classList.remove("in"); p.classList.add("leaving"); setTimeout(() => p.remove(), 300); }, after);
+  }
+  function say(from, text, seconds=CONFIG.POPUP_STAY, anywhere=false){
+    const p = popup(from, esc(text), "", anywhere);
+    Sound.play(from === "SYSTEM" ? "system" : "message");
+    remove(p, (FAST ? 0.3 : seconds) * 1000);
+    return p;
+  }
+
+  /* where a popup can go: to the right of the task, below the header, not on top of another popup
+     (anywhere: over the task too; for the end, when everyone skips) */
+  function contentRight(){
+    const main = document.getElementById("main").getBoundingClientRect();
+    let right = main.left + 24;
+    document.querySelectorAll("#main .instruction, #main .cell, #main .mopt, #main .tray, #main .skip, #main .framed-note")
+      .forEach(e => { right = Math.max(right, e.getBoundingClientRect().right); });
+    return { right, top:main.top };
+  }
+  const overlaps = (a, b, m=10) => a.left < b.right + m && b.left < a.right + m && a.top < b.bottom + m && b.top < a.bottom + m;
+  function place(p, anywhere=false){
+    let { right, top } = contentRight();
+    if(anywhere) right = document.getElementById("main").getBoundingClientRect().left - 40;
+    const w = p.offsetWidth, h = p.offsetHeight, vw = innerWidth, vh = innerHeight;
+    const x0 = right + 40, x1 = vw - w - 24, y0 = top + 24, y1 = vh - h - 24;
+    const others = [...layer().children].filter(o => o !== p && !o.classList.contains("leaving")).map(o => o.getBoundingClientRect());
+    let x = Math.max(x0, x1), y = y0;                                   // narrow screen: as far right as possible
+    for(let i = 0; i < 60; i++){
+      const cx = x1 > x0 ? x0 + rand() * (x1 - x0) : x, cy = y0 + rand() * Math.max(0, y1 - y0);
+      if(!others.some(o => overlaps(o, { left:cx, right:cx + w, top:cy, bottom:cy + h }))){ x = cx; y = cy; break; }
+      if(i === 59){ y = y0 + (others.length * (h + 10)) % Math.max(1, y1 - y0); }
     }
+    p.style.left = Math.round(x) + "px"; p.style.top = Math.round(y) + "px";
   }
-  return -1;
-}
-
-/* =====================================================================
-   DIALOG: the notification window where workers write to the player
-   ===================================================================== */
-const Dialog = (() => {
-  const box = () => document.getElementById("modal");
-  let isOpen = false;
-
-  function open(from, tag=TEXT.dialog.direct, note=""){
-    const m = box();
-    m.querySelector(".dm-tag").textContent = tag;
-    const sys = m.querySelector(".dm-system"); sys.textContent = TEXT.dialog.backToWork; sys.classList.remove("urgent");
-    m.querySelector(".dm-note").textContent = note;
-    m.querySelector(".dm-who").textContent = personLabel(from);
-    m.querySelector(".dm-hints").innerHTML = "";
-    m.querySelector(".dm-extra").innerHTML = "";
-    m.querySelector(".dm-interpret").textContent = "";
-    m.hidden = false; isOpen = true;
-    Sound.play("dialog");
+  /* a new task may be wider: move the popups that would cover it */
+  function makeRoom(){
+    const { right } = contentRight();
+    [...layer().children].forEach(p => { if(p.getBoundingClientRect().left < right + 20) place(p); });
   }
-  function close(){ box().hidden = true; isOpen = false; Story.refreshInbox(); }
 
-  /* ask a question with two options; the player can click or type.
-     fallback: option chosen when the typed text is unclear (null = ask again)
-     systemChoice: option chosen by the platform's "back to work" link
-     freeText: any typed text counts as the first option (used to sign) */
-  function ask({ from, text, hints=[], options, fallback=null, systemChoice=1, freeText=false, tag, note }){
+  /* ---------------- a question: YES / NO ---------------- */
+  function ask(m){
     return new Promise(resolve => {
-      open(from, tag, note);
-      const m = box();
-      m.querySelector(".dm-text").textContent = text;
-      const input = m.querySelector("#dm-input");
-      input.value = ""; input.disabled = false; input.hidden = false;
-      const buttons = m.querySelector(".dm-buttons");
-      buttons.innerHTML = options.map((o, i) => `<button type="button" class="opt" data-i="${i}">${esc(o.label)}</button>`).join("");
-
-      // hints from other workers appear one by one
-      const hb = m.querySelector(".dm-hints");
-      if(hints.length) hb.innerHTML = `<p class="label">${TEXT.dialog.hintsFrom}</p>`;
-      hints.forEach(([who, line], i) => setTimeout(() => {
-        if(m.hidden) return;
-        const d = document.createElement("div");
-        d.className = "hint " + personKind(who);
-        d.innerHTML = `<span class="who">${esc(personLabel(who))}</span> ${esc(line)}`;
-        hb.appendChild(d); Sound.play("message");
-      }, (FAST ? 50 : 700) * (i + 1)));
-
-      let done = false;
-      const finish = (i, typed="", note="") => {
-        if(done) return; done = true;
-        input.disabled = true;
-        if(note) m.querySelector(".dm-interpret").textContent = note;
-        setTimeout(() => { close(); resolve({ choice:i, text:typed }); }, note ? (FAST ? 100 : 1300) : 150);
-      };
-      buttons.querySelectorAll(".opt").forEach(b => b.onclick = () => finish(+b.dataset.i));
-      m.querySelector(".dm-system").onclick = () => finish(systemChoice);
-      m.querySelector(".dm-form").onsubmit = e => {
-        e.preventDefault();
-        const typed = input.value.trim(); if(!typed) return;
-        let i = interpret(typed, options);
-        if(freeText && i === -1) i = 0;
-        if(i >= 0) return finish(i, typed, fmt(TEXT.dialog.interpreted, { answer:options[i].label }));
-        if(fallback !== null) return finish(fallback, typed, fmt(TEXT.dialog.normalised, { answer:options[fallback].label }));
-        m.querySelector(".dm-interpret").textContent = `${PEOPLE[from]?.name || ""}: ${TEXT.dialog.unclear}`;
-        input.value = "";
-      };
-      setTimeout(() => input.focus(), 50);
+      const p = popup(m.from, esc(m.text));
+      p.insertAdjacentHTML("beforeend", `<div class="btns"><button type="button">YES</button><button type="button">NO</button></div>`);
+      place(p);
+      Sound.play(m.from === "SYSTEM" ? "system" : "dialog");
+      S.open = { p, shownAt:G.tasksDone, ignore:() => { remove(p); resolve(null); } };
+      p.querySelectorAll(".btns button").forEach((b, i) => b.onclick = () => {
+        S.open = null;
+        const a = (i === 0 ? m.yes : m.no) || {};
+        p.querySelector(".btns").remove();
+        p.insertAdjacentHTML("beforeend", `<p class="you">you: ${i === 0 ? "YES" : "NO"}</p>`);
+        Sound.play("click");
+        if(a.reply) setTimeout(() => {
+          p.insertAdjacentHTML("beforeend", `<p><span class="who">${esc(m.from)}</span><span class="text">${esc(a.reply)}</span></p>`);
+          Sound.play(m.from === "SYSTEM" ? "system" : "message");
+        }, FAST ? 50 : 700);
+        remove(p, (FAST ? 0.3 : a.reply ? 5 : 2) * 1000);
+        resolve(a);
+      });
     });
   }
 
-  /* show something with a single button */
-  function show({ from, text, html="", button=TEXT.dialog.close, after=null }){
-    return new Promise(resolve => {
-      open(from);
-      const m = box();
-      m.querySelector(".dm-text").textContent = text || "";
-      m.querySelector(".dm-extra").innerHTML = html;
-      m.querySelector("#dm-input").hidden = true;
-      m.querySelector(".dm-buttons").innerHTML = `<button type="button" class="opt">${esc(button)}</button>`;
-      m.querySelector(".dm-buttons .opt").onclick = () => { close(); resolve(); };
-      m.querySelector(".dm-system").onclick = () => { close(); resolve(); };
-      if(after) after(m);
-    });
+  /* turning them down (or not answering): the arrow stops working and the messages stop for a while */
+  function drop(){
+    S.joined = false; S.fresh = true;
+    S.quietUntil = G.tasksDone + (S.active ? 1 : 0) + CONFIG.QUIET_TASKS;
   }
 
-  return { ask, show, isOpen: () => isOpen };
+  /* ---------------- the messages, one after another ---------------- */
+  async function run(){
+    while(S.idx < MESSAGES.length){
+      await until(ready);
+      const m = MESSAGES[S.idx], asks = m.yes || m.no || m.now;
+      await taskTime(S.fresh ? CONFIG.POPUP_FIRST : asks ? CONFIG.POPUP_GAP : CONFIG.POPUP_LINE_GAP);
+      if(G.ended) return;
+      if(!ready()) continue;
+      S.fresh = false;
+
+      if(m.now){                                          // 12:00: press the arrow, all together
+        const p = popup(m.from, esc(m.text), "now");
+        Sound.play("dialog");
+        S.now = true;
+        const pressed = await new Promise(res => { S.open = { p, shownAt:G.tasksDone, ignore:() => { remove(p); res(false); }, strike:() => res(true) }; });
+        S.now = false;
+        if(pressed) return;
+        drop(); continue;
+      }
+      if(m.yes || m.no){
+        const a = await ask(m);
+        if(m.survey){ S.idx++; continue; }                // the company's survey: nothing changes
+        if(!a || a.drop){ drop(); continue; }             // the same message comes back later
+        S.joined = true;
+      } else {
+        const p = say(m.from, m.text);
+        if(m.withheld) setTimeout(() => p.classList.add("withheld"), FAST ? 50 : 1500);
+      }
+      S.idx++;
+    }
+  }
+
+  /* ---------------- called by the game ---------------- */
+  function taskStarted(){
+    S.active = true; layer().hidden = false;
+    makeRoom();
+    if(!S.started){ S.started = true; run(); }
+  }
+  function taskEnded(){
+    S.active = false;
+    // a question left unanswered until the end of the task after the one it came in
+    if(S.open && G.tasksDone >= S.open.shownAt + 2){ const o = S.open; S.open = null; o.ignore(); }
+  }
+  /* between rounds and on full screens: the popups go away (a question waiting comes back with the next task) */
+  function hide(){
+    layer().hidden = true;
+    [...layer().children].forEach(p => { if(!S.open || p !== S.open.p) p.remove(); });
+  }
+  function clear(){ layer().innerHTML = ""; layer().hidden = true; }
+  /* the arrow pressed at 12:00 */
+  function strike(){ const o = S.open; S.open = null; if(o && o.strike){ remove(o.p); o.strike(); } }
+
+  return { taskStarted, taskEnded, hide, clear, say, strike,
+           canSkip: () => S.joined && G.tasksDone >= S.quietUntil, isNow: () => S.now };
 })();
-
-/* =====================================================================
-   STORY: the messages that appear after tasks, and the road to the union
-   ===================================================================== */
-const Story = (() => {
-  // saidNo: the coworkers' messages are on (from the start now that there is no survey)
-  // joined: the worker has accepted a coworker's message at least once (the skip arrow works from then on)
-  const S = { saidNo:true, joined:false, asks:0, step:0, cold:false, nextStepAt:0, offered:[], strikeReady:false,
-              breakroomOpen:false, breakroomIdx:0, channelIdx:0, ghostIdx:0, pastPosted:false, chatReplyIdx:0,
-              pending:false };          // pending: a union message waiting to be read
-  const level = () => Math.min(G.resets, 3);
-  const where = () => S.breakroomOpen ? "break" : "channel";
-  const say = (place, [who, text]) => post(place, personLabel(who), fmt(text, { id:G.id, name:G.name }), personKind(who));
-
-  function start(){ STORY.start.forEach(m => say("channel", m)); refreshInbox(); }
-
-  /* ---------------- the inbox: a waiting message, always there ---------------- */
-  function refreshInbox(){
-    const box = document.getElementById("inbox");
-    if(!S.pending || Dialog.isOpen() || G.ended){ box.hidden = true; return; }
-    box.hidden = false;
-    box.innerHTML = `${esc(fmt(TEXT.inbox.text, { who:personLabel(STORY.union[S.step].from) }))} <button class="mini">${TEXT.inbox.open}</button>`;
-    box.querySelector("button").onclick = openPending;
-  }
-  function setPending(){ S.pending = true; refreshInbox(); Sound.play("dialog"); }
-  async function openPending(){
-    if(!S.pending || Dialog.isOpen() || G.ended) return;
-    S.pending = false; refreshInbox();
-    await unionStep();
-  }
-
-  /* messages that appear on their own after each task */
-  function afterTask(){
-    if(chance(CONFIG.GHOST_MESSAGE_CHANCE[level()])){
-      const l = STORY.ghosts[level()];
-      say("channel", l[S.ghostIdx++ % l.length]);
-    } else if(S.channelIdx < STORY.channel.length && chance(0.35)){
-      say("channel", STORY.channel[S.channelIdx++]);
-    }
-    if(S.breakroomOpen && chance(0.5)) chatter();
-    if(G.timeoutsInRow === 2) say("channel", STORY.sabotage);
-    // a player who disappeared in an earlier game on this computer
-    if(!S.pastPosted && G.tasksDone >= 3){
-      const past = pastPlayers(); S.pastPosted = true;
-      if(past.length) post("channel", `${pick(past)} [disappeared]`, pick(STORY.pastPlayers), "ghost");
-    }
-    // the next union message arrives
-    if(S.saidNo && !S.pending && !S.strikeReady && S.step < STORY.union.length && G.tasksDone >= S.nextStepAt) setPending();
-  }
-
-  function afterReset(){
-    say("channel", STORY.afterReset[Math.max(0, Math.min(G.resets - 1, STORY.afterReset.length - 1))]);
-  }
-
-  /* the break room chatters */
-  function chatter(){
-    if(S.cold) return;                                     // after turning them down, the break room goes quiet
-    if(S.breakroomOpen && S.breakroomIdx < STORY.breakroom.length) say("break", STORY.breakroom[S.breakroomIdx++]);
-  }
-
-  /* a rest period: now there is time. A waiting message opens by itself. */
-  function onBreak(){
-    setTimeout(async () => {
-      if(Dialog.isOpen() || G.ended || !G.onBreak) return;
-      if(S.pending) await openPending();
-    }, FAST ? 100 : 1500);
-  }
-
-  /* the company's wellbeing survey: "Everything OK at work?"
-     Asked in every survey slot. Only the first NO changes anything. */
-  async function survey(){
-    const q = STORY.question;
-    if(!S.saidNo){
-      // one message from another worker, outside the survey, in the channel: you have to notice it
-      const pool = q.hints[Math.min(S.asks + G.resets, q.hints.length - 1)];
-      const hint = pool[S.asks % pool.length];
-      setTimeout(() => say("channel", hint), FAST ? 50 : 1200);
-    }
-    const res = await Dialog.ask({
-      from:q.from, tag:TEXT.dialog.survey, note:q.note,
-      text:q.texts[Math.min(S.asks, q.texts.length - 1)],
-      options:[q.yes, q.no], fallback:0, systemChoice:0
-    });
-    S.asks++;
-    say("channel", res.choice === 1 ? q.afterNo : q.afterYes);
-    if(res.choice === 1 && !S.saidNo){
-      S.saidNo = true; S.cold = false;                     // back with the others, from the step they turned down
-      await wait(800);
-      await unionStep();                                   // a worker writes right away
-    }
-  }
-
-  /* one step towards the union */
-  async function unionStep(){
-    const st = STORY.union[S.step];
-    const res = await Dialog.ask({
-      from:st.from, text:S.offered[S.step] && st.again ? st.again : st.text,
-      options:[st.accept, st.decline], fallback:null, systemChoice:1, freeText:!!st.freeText
-    });
-    if(res.choice === 0){
-      S.joined = true; S.cold = false;
-      await doAction(st.action, res.text);
-      if(st.reply) say(where(), [st.from, st.reply]);
-      S.step++;
-      S.nextStepAt = G.tasksDone + 1;
-      if(S.step === STORY.union.length) S.strikeReady = true;
-    } else {
-      S.offered[S.step] = true;
-      say(where(), [st.from, st.declineReply]);
-      // turning them down: the break room goes quiet and nobody covers for the worker any more,
-      // until they accept again. The message comes back a couple of tasks later.
-      S.cold = true;
-      S.nextStepAt = G.tasksDone + CONFIG.UNION_REOFFER_AFTER;
-    }
-  }
-
-  async function doAction(action, typed){
-    if(action === "breakroom"){
-      S.breakroomOpen = true;
-      document.getElementById("tab-break").hidden = false;
-      chatter();
-    }
-    if(action === "share"){
-      const sh = STORY.share;
-      const all = G.history;
-      const cell = all.length ? fmt(sh.format, { pct:Math.round(100 * all.filter(h => h.negative).length / all.length) }) : sh.none;
-      const rows = [...sh.rows, [sh.you, cell]];
-      await Dialog.show({ from:"kwame", text:sh.title,
-        html:`<table class="share"><tr class="muted">${sh.header.map(h => `<td>${esc(h)}</td>`).join("")}</tr>${rows.map((r, i) => `<tr class="${i === rows.length - 1 ? "you" : ""}">${r.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</table>
-              <p><b>${esc(sh.conclusion)}</b></p>` });
-    }
-    if(action === "sign"){
-      const name = typed || G.name || G.id;
-      await Dialog.show({ from:"marisol", text:STORY.sign.counting,
-        html:`<div class="card-sign">${esc(name)}</div>`,
-        after:m => setTimeout(() => { m.querySelector(".dm-text").textContent = STORY.sign.done; Sound.play("positive"); }, FAST ? 50 : 1200) });
-    }
-  }
-
-  function postponeStrike(){
-    S.strikeReady = false; S.step = STORY.union.length - 1; S.offered[S.step] = true;
-    S.nextStepAt = G.tasksDone + 1;
-    say(where(), STORY.strikePostponed);
-  }
-
-  /* the player writes in the chat (any time; only in a rest period is there time for it) */
-  function playerWrote(place, text){
-    const c = STORY.chat;
-    const monitored = place === "channel" && interpret(text, [{ keywords:c.monitoredWords }]) === 0;
-    post(place, `${TEXT.chat.you} · ${G.id}`, monitored ? c.withheld : text, monitored ? "withheld" : "me");
-    const replies = place === "break" ? c.breakroomReplies : c.channelReplies;
-    if(place === "break" && S.cold) return;               // nobody answers
-    if(place === "break" || chance(0.6)) setTimeout(() => say(place, replies[S.chatReplyIdx++ % replies.length]), FAST ? 100 : 1800);
-  }
-
-  return { start, afterTask, afterReset, chatter, onBreak, survey, postponeStrike, playerWrote, refreshInbox,
-           strikeReady: () => S.strikeReady, progress: () => S.cold ? 0 : S.step, joined: () => S.joined };
-})();
-
-/* ---------------- players who disappeared before, on this computer ---------------- */
-function pastPlayers(){ try { return JSON.parse(localStorage.getItem("mhq-disappeared") || "[]"); } catch(e){ return []; } }
-function rememberDisappeared(id){
-  try { const l = pastPlayers(); l.push(id); localStorage.setItem("mhq-disappeared", JSON.stringify(l.slice(-10))); } catch(e){}
-}

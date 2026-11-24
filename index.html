@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Minimum Human Quota</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body class="pre">
 <div id="app">
@@ -27,45 +27,21 @@
 
   <!-- centre: intro screens, then the work -->
   <main id="main"></main>
-
-  <!-- right: messages -->
-  <aside id="right">
-    <div id="inbox" hidden></div>
-    <div class="tabs"><button id="tab-channel" class="tab active"></button><button id="tab-break" class="tab" hidden></button></div>
-    <form id="chat" autocomplete="off"><input id="chat-input" type="text"></form>
-    <div id="feed-channel" class="feed"></div>
-    <div id="feed-break" class="feed" hidden></div>
-  </aside>
 </div>
 
 <!-- the screen fades as the worker disappears -->
 <div id="veil"></div>
 
-<!-- direct messages from other workers -->
-<div id="modal" hidden>
-  <div class="dialog">
-    <p class="label"><span class="dm-tag"></span></p>
-    <p class="dm-who muted"></p>
-    <p class="dm-text big"></p>
-    <div class="dm-extra"></div>
-    <div class="dm-hints"></div>
-    <form class="dm-form" autocomplete="off">
-      <input id="dm-input" type="text">
-      <div class="dm-buttons"></div>
-    </form>
-    <p class="dm-note muted"></p>
-    <p class="dm-interpret muted"></p>
-    <button type="button" class="dm-system link"></button>
-  </div>
-</div>
+<!-- the workers' messages: popups that appear next to the task -->
+<div id="popups" hidden></div>
 
 <!-- full-screen moments: reset, game over, endings -->
 <div id="overlay" hidden></div>
 
-<script src="content.js?v=4"></script>
-<script src="sound.js?v=4"></script>
-<script src="tasks.js?v=4"></script>
-<script src="story.js?v=4"></script>
-<script src="game.js?v=4"></script>
+<script src="content.js?v=5"></script>
+<script src="sound.js?v=5"></script>
+<script src="tasks.js?v=5"></script>
+<script src="story.js?v=5"></script>
+<script src="game.js?v=5"></script>
 </body>
 </html>
